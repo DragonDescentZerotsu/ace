@@ -1,0 +1,40 @@
+## GENERAL GUIDELINES
+
+## ORAL BIOAVAILABILITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[bio-00001] helpful=0 harmful=0 :: Probability the molecule is orally bioavailable (viable property space for absorption). Most reliable for Ro5-ish small molecules. Less reliable for macrocycles, peptides, active-transporter substrates.
+
+## SCORING (BASE = 40)
+
+## A) RULE-OF-5 BLOCK
+[bio-00002] helpful=0 harmful=0 :: 0 Lipinski violations: +20
+[bio-00003] helpful=0 harmful=0 :: 1 violation: +10
+[bio-00004] helpful=0 harmful=0 :: 2 violations: -10
+[bio-00005] helpful=0 harmful=0 :: 3-4 violations: -25
+[bio-00006] helpful=0 harmful=0 :: MW >600: additional -10
+
+## B) TPSA BLOCK
+[bio-00007] helpful=0 harmful=0 :: ≤60: +20; 60-90: +10; 90-120: +0; 120-140: -10; >140: -25
+
+## C) FLEXIBILITY (ROTATABLE BONDS)
+[bio-00008] helpful=0 harmful=0 :: ≤6: +10; 7-10: +0; 11-15: -10; >15: -20
+
+## D) IONIZATION/CHARGE AT PH 7.4
+[bio-00009] helpful=0 harmful=0 :: Neutral: +5; +1 (amine): +5; -1 (acid): +0; |charge| ≥2: -20; ambiguous: -5
+[bio-00010] helpful=0 harmful=0 :: Quaternary ammonium or sulfonate/phosphate present: -30
+
+## E) SOLUBILITY (ESOL LOGS)
+[bio-00011] helpful=0 harmful=0 :: >-3: +5; -3 to -4: +0; <-4: -10; <-6: -20
+
+## F) AROMATICITY/FUSED AROMATICS
+[bio-00012] helpful=0 harmful=0 :: PAH-like: -10; aromatic_rings ≥4 + fraction_csp3 <0.2: -5
+
+## G) STRUCTURAL ALERTS
+[bio-00013] helpful=0 harmful=0 :: Alert count ≥3: -5; ≥6: -10
+
+## EXCEPTION HANDLING
+[bio-00014] helpful=0 harmful=0 :: Macrocycles: reduce penalty severity by ~50%, avoid extremes
+[bio-00015] helpful=0 harmful=0 :: Transporter substrates can violate Ro5: if violations present but resembles known transporter substrates, output 20-40 not near 0
+[bio-00016] helpful=0 harmful=0 :: If macrocycle/bRo5/ambiguous: compress toward 50: P = 50 + 0.7*(P-50)
+[bio-00017] helpful=0 harmful=0 :: Clamp to [0, 100].

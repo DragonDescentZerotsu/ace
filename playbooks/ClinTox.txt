@@ -1,0 +1,37 @@
+## GENERAL GUIDELINES
+
+## CLINICAL TOXICITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[cli-00001] helpful=0 harmful=0 :: P(fail clinical trials due to toxicity). Safety/toxicity accounts for ~20-30% of clinical-stage failures. Start most drug-like structures at ~20-30 and adjust.
+
+## SCORING (BASE P = 25)
+
+## A) HERG/QT RISK
+[cli-00002] helpful=0 harmful=0 :: Basic at pH 7.4 AND logD7.4 >1.4: +15
+[cli-00003] helpful=0 harmful=0 :: Basic AND logD7.4 ≤1.4: +5
+[cli-00004] helpful=0 harmful=0 :: Neutral AND logD7.4 >3.3: +10
+[cli-00005] helpful=0 harmful=0 :: Aromatic rings ≥3: +5
+[cli-00006] helpful=0 harmful=0 :: TPSA ≤60: +5
+
+## B) DILI/REACTIVE METABOLITE
+[cli-00007] helpful=0 harmful=0 :: Each high-value RM alert (aniline, nitroaromatic, phenol/catechol, thiophene, furan, quinone): +6 each (cap +24)
+[cli-00008] helpful=0 harmful=0 :: logP ≥3: +8; logP ≥4.5: +12 (replaces +8)
+
+## C) DIRECT ELECTROPHILE/GENOTOX
+[cli-00009] helpful=0 harmful=0 :: Epoxide or aziridine: +25
+[cli-00010] helpful=0 harmful=0 :: Acyl halide / sulfonyl chloride / isocyanate: +25
+[cli-00011] helpful=0 harmful=0 :: Activated alkyl halide or strong Michael acceptor: +15
+
+## D) PHOSPHOLIPIDOSIS/CAD
+[cli-00012] helpful=0 harmful=0 :: Most basic pKa ≥7.5 AND logP ≥3 AND ≥1 aromatic ring: +10
+[cli-00013] helpful=0 harmful=0 :: ≥2 basic sites: +5
+
+## E) COMPLEXITY/EXPOSURE MODIFIERS
+[cli-00014] helpful=0 harmful=0 :: ESOL poorly soluble: +5
+[cli-00015] helpful=0 harmful=0 :: MW ≥550: +5
+[cli-00016] helpful=0 harmful=0 :: Zwitterionic or strongly acidic + logP <2: -5
+
+## KEY PRINCIPLE
+[cli-00017] helpful=0 harmful=0 :: Convergent evidence (alert + enabling properties) is much stronger than either alone. Don't treat any single alert as deterministic.
+[cli-00018] helpful=0 harmful=0 :: Clamp to [0, 100].

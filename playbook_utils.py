@@ -123,15 +123,19 @@ def apply_curator_operations(playbook_text, operations, next_id):
     
     # Process operations
     bullets_to_add = []
+    bullets_to_update = {} # ADDED FOR UPDATE: Dictionary to store updates
     
     for op in operations:
         op_type = op['type']
         
-        # TODO: Future operation types (not implemented yet)
-        # elif op_type == 'UPDATE':
-        #     bullet_id = op.get('bullet_id', '')
-                    #     new_content = op.get('content', '')
-            #     bullets_to_update[bullet_id] = new_content
+        if op_type == 'UPDATE':
+            bullet_id = op.get('bullet_id', '')
+            new_content = op.get('content', '')
+            if bullet_id and new_content:
+                # ADDED FOR UPDATE: Record the update intent
+                bullets_to_update[bullet_id] = new_content
+                print(f"  Updating bullet {bullet_id}")
+        
         # elif op_type == 'MERGE':
         #     source_ids = op.get('source_ids', [])
         #     bullets_to_delete.update(source_ids)
@@ -167,7 +171,13 @@ def apply_curator_operations(playbook_text, operations, next_id):
     for line in lines:
         parsed = parse_playbook_line(line)
         if parsed:
-            new_lines.append(line)
+            # ADDED FOR UPDATE: Check if this bullet is marked for update
+            if parsed['id'] in bullets_to_update:
+                # Reset counts to 0 and use new content
+                updated_line = format_playbook_line(parsed['id'], 0, 0, bullets_to_update[parsed['id']])
+                new_lines.append(updated_line)
+            else:
+                new_lines.append(line)
         else:
             new_lines.append(line)
     

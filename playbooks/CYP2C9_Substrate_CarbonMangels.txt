@@ -1,0 +1,44 @@
+## GENERAL GUIDELINES
+
+## CYP2C9 SUBSTRATE ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[cyp-00001] helpful=0 harmful=0 :: Probability the molecule is metabolized by CYP2C9. Substrates are often aromatic, lipophilic, neutral to weakly acidic, frequently containing an anionizable group and H-bonding features.
+
+## SCORING (BASE SCORE = 15)
+
+## A) IONIZATION / ACIDIC CHARACTER (LARGEST SIGNAL)
+[cyp-00002] helpful=0 harmful=0 :: has_negative_states: +25
+[cyp-00003] helpful=0 harmful=0 :: Representative net_charge == -1: additional +10
+[cyp-00004] helpful=0 harmful=0 :: has_positive_states AND no negative: -20
+[cyp-00005] helpful=0 harmful=0 :: is_ambiguous: -5
+
+## B) ACIDIC/ANIONIZABLE MOTIFS
+[cyp-00006] helpful=0 harmful=0 :: Carboxylic acid: +20; Tetrazole: +18; Sulfonylurea-like: +15; Imide-like: +10; Phenol (sole acidity): +5
+
+## C) AROMATICITY
+[cyp-00007] helpful=0 harmful=0 :: 1-3 aromatic rings: +12; 0 aromatic rings: -10; PAH-like: -5
+
+## D) LIPOPHILICITY
+[cyp-00008] helpful=0 harmful=0 :: logP 2-5: +10; logP <1: -10; logP >6: -5
+
+## E) SIZE & POLARITY
+[cyp-00009] helpful=0 harmful=0 :: MW 200-500: +8; MW <150: -8; MW >600: -15
+[cyp-00010] helpful=0 harmful=0 :: TPSA 20-90: +6; TPSA >120: -15
+
+## F) H-BOND DONORS / FLEXIBILITY
+[cyp-00011] helpful=0 harmful=0 :: HBD 0-2: +4; HBD ≥4: -10
+[cyp-00012] helpful=0 harmful=0 :: Rotatable bonds 2-8: +3; >12: -8
+
+## G) INHIBITOR-LIKE HEME LIGATORS
+[cyp-00013] helpful=0 harmful=0 :: Imidazole/triazole: -15; Pyridine (no acidity): -8
+
+## APPLICABILITY DOMAIN
+[cyp-00014] helpful=0 harmful=0 :: No aromatics AND TPSA >120 AND logP <1: force prob ≤20
+[cyp-00015] helpful=0 harmful=0 :: Permanently charged (|charge| ≥2): cap ≤30
+
+## TYPICAL CYP2C9 SUBSTRATE PATTERNS
+[cyp-00016] helpful=0 harmful=0 :: Aryl-(CH2/CH)-CO2H (NSAID-like); Diaryl + acid (diclofenac-like)
+[cyp-00017] helpful=0 harmful=0 :: Sulfonylurea with para-substituted phenyl (tolbutamide-like)
+[cyp-00018] helpful=0 harmful=0 :: Hydantoin/imide with phenyl rings (phenytoin-like)
+[cyp-00019] helpful=0 harmful=0 :: Clamp to [0, 100].

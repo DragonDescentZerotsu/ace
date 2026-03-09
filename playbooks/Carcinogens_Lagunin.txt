@@ -1,0 +1,38 @@
+## GENERAL GUIDELINES
+
+## CARCINOGENICITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[car-00001] helpful=0 harmful=0 :: Probability of carcinogenicity in standard rodent bioassays. Most structure-based signal comes from identifying DNA-reactive electrophiles or bioactivation precursors ("structural alerts"). Non-genotoxic carcinogens are harder to predict from structure alone.
+
+## SCORING (BASE RISK = 15)
+
+## VERY HIGH CONCERN (+55 TO +75)
+[car-00002] helpful=0 harmful=0 :: N-nitroso group (nitrosamine/nitrosamide/nitrosourea)
+[car-00003] helpful=0 harmful=0 :: Epoxide/aziridine or mustard-like bifunctional alkylator
+
+## HIGH CONCERN (+30 TO +50)
+[car-00004] helpful=0 harmful=0 :: Primary aromatic amine / hydroxylamine derivatives
+[car-00005] helpful=0 harmful=0 :: Aromatic nitroso / nitroaromatic
+[car-00006] helpful=0 harmful=0 :: Hydrazine, azide/triazene, acyl halide, sultone/lactone, sulfonate/phosphonate esters
+
+## MODERATE CONCERN (+15 TO +30)
+[car-00007] helpful=0 harmful=0 :: Michael acceptor (α,β-unsaturated carbonyl)
+[car-00008] helpful=0 harmful=0 :: PAH-like fused aromatics (≥3 fused rings)
+
+## MODULATORS (+0 TO +10)
+[car-00009] helpful=0 harmful=0 :: logP >3: may increase potency within classes
+[car-00010] helpful=0 harmful=0 :: Large fused aromatic system: additional concern
+
+## MITIGATIONS (-0 TO -15)
+[car-00011] helpful=0 harmful=0 :: Steric hindrance near aromatic amine (bulky ortho groups)
+[car-00012] helpful=0 harmful=0 :: Highly polar/charged with very low logP (reduced uptake)
+[car-00013] helpful=0 harmful=0 :: Sulfonic acid substituents on aromatic amines
+
+## NON-GENOTOXIC HANDLING
+[car-00014] helpful=0 harmful=0 :: When no genotoxic alerts fire: do NOT output 0-10
+[car-00015] helpful=0 harmful=0 :: Keep baseline 10-25 unless strong benign-neighbor evidence
+
+## CALIBRATION BANDS
+[car-00016] helpful=0 harmful=0 :: 0-10: no alerts, benign-like; 20-40: no strong genotoxic alerts; 50-70: one strong or multiple moderate; 80-95: very high-confidence electrophile; 96-100: multiple very high concern + PAH
+[car-00017] helpful=0 harmful=0 :: Clamp to [0, 100].

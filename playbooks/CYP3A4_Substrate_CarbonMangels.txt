@@ -1,0 +1,37 @@
+## GENERAL GUIDELINES
+
+## CYP3A4 SUBSTRATE ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[cyp-00001] helpful=0 harmful=0 :: Probability the molecule is a CYP3A4 substrate. CYP3A4 has a large, flexible, lipophilic binding cavity accepting diverse/large ligands. Productive binding typically involves one key polar H-bond anchor plus hydrophobic/π contacts.
+
+## SCORING (BASE S = 50, UNINFORMED PRIOR)
+
+## SIZE / LIPOPHILICITY / FLEXIBILITY
+[cyp-00002] helpful=0 harmful=0 :: MW: <200 -15; 200-350 +0; 350-650 +10; >650 +5
+[cyp-00003] helpful=0 harmful=0 :: cLogP: <1 -15; 1-2 -5; 2-5 +10; 5-7 +5; >7 -10
+[cyp-00004] helpful=0 harmful=0 :: RotB: 0-2 -5; 3-8 +5; >8 +0
+[cyp-00005] helpful=0 harmful=0 :: Aromatic rings: 0 -10; 1-3 +5; ≥4 +0
+
+## POLAR ANCHOR / PHARMACOPHORE
+[cyp-00006] helpful=0 harmful=0 :: HBA: 0 -25; 1-6 +10; 7-10 +5; >10 -10
+[cyp-00007] helpful=0 harmful=0 :: HBD: 0-2 +5; 3-4 +0; >4 -10
+[cyp-00008] helpful=0 harmful=0 :: TPSA: <20 -5; 20-90 +10; 90-140 +0; >140 -20
+[cyp-00009] helpful=0 harmful=0 :: Pharmacophore: Acceptors≥2 AND Donors≥1 AND Hydrophobes: +5
+
+## IONIZATION/CHARGE (PH 7.4)
+[cyp-00010] helpful=0 harmful=0 :: Net charge 0: +5; +1: +3; ≤-1: -8; |charge| ≥2 or quaternary ammonium: -20; zwitterion: -8
+
+## RED FLAGS
+[cyp-00011] helpful=0 harmful=0 :: Permanent anions (sulfonate/phosphonate): -25
+[cyp-00012] helpful=0 harmful=0 :: PAH-like (≥3 fused aromatics): -10
+[cyp-00013] helpful=0 harmful=0 :: Heteroatoms >12: -10
+
+## HEME-COORDINATION MOTIF (AMBIGUOUS)
+[cyp-00014] helpful=0 harmful=0 :: Imidazole/triazole/pyridine + cLogP ≥2: +3
+
+## INTERPRETATION
+[cyp-00015] helpful=0 harmful=0 :: 80-100: MW 300-700, cLogP 2-6, TPSA 20-90, RotB 3-8, neutral/+1, has anchor+hydrophobe
+[cyp-00016] helpful=0 harmful=0 :: 40-79: mixed signals
+[cyp-00017] helpful=0 harmful=0 :: 0-39: very polar, permanently charged, poly-anionic, or lacks heteroatoms
+[cyp-00018] helpful=0 harmful=0 :: Clamp to [0, 100].

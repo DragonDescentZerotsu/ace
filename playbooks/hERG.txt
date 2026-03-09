@@ -1,0 +1,58 @@
+## GENERAL GUIDELINES
+
+## HERG BLOCKER ASSESSMENT (IC50 < 10 ΜM)
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[her-00001] helpful=0 harmful=0 :: Probability the molecule blocks hERG (IC50 < 10 µM). Key determinants: lipophilicity increases risk (saturates ~logP 4), basic/cationic center increases risk (cation-π interactions with Y652/F656), higher polarity/TPSA decreases risk, strong acids/anions reduce risk, aromatic/hydrophobic ring content co-occurs with block.
+
+## SCORING — CHOOSE BASELINE BUCKET (P0)
+
+## 1) VERY LOW (P0=5)
+[her-00002] helpful=0 harmful=0 :: logP <1.0 AND no positive states at pH 7.4 AND TPSA ≥60
+
+## 2) LOW (P0=15)
+[her-00003] helpful=0 harmful=0 :: logP <2.0 AND charge ≤0 AND TPSA ≥40
+
+## 3) MEDIUM (P0=40)
+[her-00004] helpful=0 harmful=0 :: logP in [2, 3) OR ionization is ambiguous
+
+## 4) HIGH (P0=70)
+[her-00005] helpful=0 harmful=0 :: has_positive_states AND logP ≥3.0 AND TPSA ≤90
+
+## 5) VERY HIGH (P0=85)
+[her-00006] helpful=0 harmful=0 :: has_positive_states AND logP ≥4.0 AND TPSA ≤75 AND MW in [250, 550]
+
+## ADJUSTMENTS (APPLY TO P0)
+
+## IONIZATION
+[her-00007] helpful=0 harmful=0 :: charge ≤ -1: -25
+[her-00008] helpful=0 harmful=0 :: charge == +1: +10
+[her-00009] helpful=0 harmful=0 :: charge ≥ +2: -10 (permeability limitation)
+[her-00010] helpful=0 harmful=0 :: is_ambiguous: move 10 points toward 50
+
+## POLARITY
+[her-00011] helpful=0 harmful=0 :: TPSA ≥120: -20
+[her-00012] helpful=0 harmful=0 :: TPSA ≤40: +10
+
+## SIZE / FLEXIBILITY
+[her-00013] helpful=0 harmful=0 :: MW <250: -15
+[her-00014] helpful=0 harmful=0 :: MW 300-500: +5
+[her-00015] helpful=0 harmful=0 :: Rotatable bonds ≥8: +5
+
+## AROMATIC / HYDROPHOBE TOPOLOGY
+[her-00016] helpful=0 harmful=0 :: aromatic_rings ≥3: +5
+[her-00017] helpful=0 harmful=0 :: PAH-like (≥3 fused aromatics): +10
+[her-00018] helpful=0 harmful=0 :: fraction_csp3 ≥0.6 AND aromatic_rings ≤1: -5
+
+## MITIGATING POLAR MOTIFS
+[her-00019] helpful=0 harmful=0 :: amide_bonds ≥2: -5
+[her-00020] helpful=0 harmful=0 :: Strong anion motif AND logP <3: -10
+
+## CLASSIC BLOCKER MOTIF BOOST
+[her-00021] helpful=0 harmful=0 :: Tertiary/quaternary amine + aromatic_rings ≥2: +10
+
+## FINAL CALIBRATION GUARDS
+[her-00022] helpful=0 harmful=0 :: P ≥95 only if: positive states AND logP≥4 AND TPSA≤60 AND (aromatic≥2 OR PAH-like) AND not anionic
+[her-00023] helpful=0 harmful=0 :: P ≤5 only if: no positive states AND logP≤1.5 AND TPSA≥80 AND MW≤350
+[her-00024] helpful=0 harmful=0 :: If many conflicting factors (cationic but very high TPSA): keep P near 50
+[her-00025] helpful=0 harmful=0 :: Clamp to [0, 100].

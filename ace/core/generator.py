@@ -89,14 +89,13 @@ class Generator:
         """
         bullet_ids = []
         
-        if use_json_mode:
-            try:
-                response_json = json.loads(response)
-                bullet_ids = response_json.get("bullet_ids", [])
-            except (json.JSONDecodeError, KeyError):
-                # If parsing fails, try regex extraction
-                bullet_ids = self._extract_bullet_ids_regex(response)
-        else:
+        # Always try JSON parsing first since the generator prompt
+        # requests JSON output regardless of the json_mode API flag
+        try:
+            response_json = json.loads(response)
+            bullet_ids = response_json.get("bullet_ids", [])
+        except (json.JSONDecodeError, KeyError):
+            # If JSON parsing fails, fall back to regex extraction
             bullet_ids = self._extract_bullet_ids_regex(response)
         
         return bullet_ids

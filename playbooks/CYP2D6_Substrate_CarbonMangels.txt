@@ -1,0 +1,47 @@
+## GENERAL GUIDELINES
+
+## CYP2D6 SUBSTRATE ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[cyp-00001] helpful=0 harmful=0 :: Probability the molecule is metabolized by CYP2D6. Key recognition motif: protonatable/basic nitrogen (cationic at pH 7.4) + hydrophobic/aromatic features + characteristic topological separation between basic N and site of metabolism (~5-7 Å).
+
+## GATE RULES (HARD OVERRIDES, APPLY FIRST)
+[cyp-00002] helpful=0 harmful=0 :: No positive states at pH 7.4 AND net charge ≤0: ceiling ≤25
+[cyp-00003] helpful=0 harmful=0 :: Predominantly anionic (negative states, no positive): ceiling ≤10
+[cyp-00004] helpful=0 harmful=0 :: MW >600: ceiling ≤40
+
+## SCORING (BASE SCORE = 10)
+
+## A) IONIZATION / CHARGE (MAX +45, MIN -40)
+[cyp-00005] helpful=0 harmful=0 :: has_positive_states: +35
+[cyp-00006] helpful=0 harmful=0 :: Representative net_charge ≥+1: +10 more
+[cyp-00007] helpful=0 harmful=0 :: has_negative_states AND no positive: -40
+[cyp-00008] helpful=0 harmful=0 :: Zwitterionic/ambiguous: +10
+
+## B) AROMATIC & RING CONTENT (MAX +20, MIN -10)
+[cyp-00009] helpful=0 harmful=0 :: aromatic_rings ≥1: +10; ≥2: +5 more; total_rings ≥3: +5 more
+[cyp-00010] helpful=0 harmful=0 :: aromatic_rings==0 AND total_rings ≤1: -10
+
+## C) ARYL-ALKYL-AMINE SPACING PROXY MOTIFS (MAX +20)
+[cyp-00011] helpful=0 harmful=0 :: Any aryl_2C_to_amine / aryl_3C_to_amine / aryl_ether_2C_to_amine / phenoxypropanolamine_like: +15
+[cyp-00012] helpful=0 harmful=0 :: 2+ present: +5 more
+
+## D) LIPOPHILICITY (MAX +15, MIN -15)
+[cyp-00013] helpful=0 harmful=0 :: logP 1.5-5.0: +15; 0.5-1.5: +5; <0.5: -10; >6.5: -15
+
+## E) TPSA (MAX +10, MIN -25)
+[cyp-00014] helpful=0 harmful=0 :: 15-60: +10; 60-90: +0; 90-120: -10; >120: -25
+
+## F) SIZE (MAX +10, MIN -20)
+[cyp-00015] helpful=0 harmful=0 :: MW 180-450: +10; <120: -10; >600: -20
+
+## G) AMIDE PENALTY
+[cyp-00016] helpful=0 harmful=0 :: ≥1 amide bond: -8; ≥3: -15
+
+## H) STRONG ACID PENALTY
+[cyp-00017] helpful=0 harmful=0 :: Carboxylic acid or strong acids: -25
+
+## CALIBRATION FLOOR
+[cyp-00018] helpful=0 harmful=0 :: If cationic + aromatic≥1 + logP 1.5-5 + TPSA ≤60: prob = max(prob, 70)
+[cyp-00019] helpful=0 harmful=0 :: If no positive state + strong acid: prob = min(prob, 5)
+[cyp-00020] helpful=0 harmful=0 :: Clamp to [0, 100].

@@ -1,0 +1,31 @@
+## GENERAL GUIDELINES
+
+## SKIN SENSITIZATION ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[ski-00001] helpful=0 harmful=0 :: Probability of skin sensitization (allergic contact dermatitis). Sensitizers need (A) electrophilic or activatable motif for covalent protein binding AND (B) sufficient skin bioavailability (logP/permeability, low permanent charge).
+
+## KEY REACTIVITY DOMAINS
+[ski-00002] helpful=0 harmful=0 :: 1) Michael acceptors; 2) SN2 electrophiles (epoxides, aziridines, alkyl halides); 3) SNAr (activated aryl halides); 4) Acyl transfer (isocyanates, anhydrides, acyl halides); 5) Schiff base formers (aldehydes); 6) Pre/pro-haptens (catechols, anilines → quinones)
+
+## SCORING (BASE P0 = 20, ~20% PREVALENCE)
+
+## ALERTSCORE (MAX OF MATCHED DOMAIN, 0-70)
+[ski-00003] helpful=0 harmful=0 :: Very high (+60-70): multi-activated SNAr, benzylic Br/I, isocyanate/isothiocyanate, quinone/quinone-imine, organic peroxides
+[ski-00004] helpful=0 harmful=0 :: High (+40-55): Michael acceptor with extra EWGs, epoxide/aziridine, anhydride/acyl halide/sulfonyl chloride
+[ski-00005] helpful=0 harmful=0 :: Moderate (+20-35): aldehyde (especially aliphatic), alpha-dicarbonyl, activated alkyl halide
+[ski-00006] helpful=0 harmful=0 :: Low (+5-15): pre/pro-hapten (catechol/hydroquinone/aniline), broad catalog alerts
+
+## PHYSCHEMADJ (-40 TO +10)
+[ski-00007] helpful=0 harmful=0 :: Estimate logKp = -2.72 + 0.71*logD(pH5.5) - 0.0061*MW
+[ski-00008] helpful=0 harmful=0 :: logKp <-5: -30; -5 to -3: -10
+[ski-00009] helpful=0 harmful=0 :: logD(pH5.5) >7: -10
+[ski-00010] helpful=0 harmful=0 :: Net charge at pH 5.5: ±1 → -10; ±2 → -20
+[ski-00011] helpful=0 harmful=0 :: TPSA >120 or HBD ≥3: -5
+
+## SPECIAL CASES
+[ski-00012] helpful=0 harmful=0 :: Aromatic aldehydes: lower concern than aliphatic (resonance deactivation)
+[ski-00013] helpful=0 harmful=0 :: Cross-linkers (multiple aldehydes/bifunctional): +10 to +20 extra
+[ski-00014] helpful=0 harmful=0 :: Don't downweight reactive acylators for hydrolytic instability
+
+## P = CLAMP(P0 + ALERTSCORE + PHYSCHEMADJ, 0, 100)

@@ -220,5 +220,12 @@ class Curator:
                 missing_fields = required_fields - set(op.keys())
                 if missing_fields:
                     raise ValueError(f"ADD operation {i} missing fields: {list(missing_fields)}")
+                    
+            # ADDED FOR UPDATE: Validate UPDATE operation structure
+            elif op_type == "UPDATE":
+                required_fields = {"type", "bullet_id", "content"}
+                missing_fields = required_fields - set(op.keys())
+                if missing_fields:
+                    raise ValueError(f"UPDATE operation {i} missing fields: {list(missing_fields)}")
         
         return operations_info

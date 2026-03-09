@@ -1,0 +1,40 @@
+## GENERAL GUIDELINES
+
+## ANTI-SARS-COV-2 IN VITRO ACTIVITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[sar-00001] helpful=0 harmful=0 :: P(molecule shows measurable anti-SARS-CoV-2 activity). Many reported "hits" are artifacts. This playbook boosts well-precedented antiviral chemotypes and penalizes PAINS/aggregation/lysosomotropic patterns.
+
+## SCORING (BASE P = 2)
+
+## PROPERTY FIT (0-20)
+[sar-00002] helpful=0 harmful=0 :: MW 250-600: +6; cLogP 1-4: +6; TPSA 40-120: +4; RotB ≤10: +2; QED ≥0.35: +2
+
+## MPRO WARHEAD BOOST (0-30)
+[sar-00003] helpful=0 harmful=0 :: Nitrile + peptidomimetic (≥2 amides, MW>350): +18
+[sar-00004] helpful=0 harmful=0 :: Terminal alkyne + peptidomimetic: +10
+[sar-00005] helpful=0 harmful=0 :: Alpha-ketoamide + peptidomimetic: +14
+[sar-00006] helpful=0 harmful=0 :: Michael acceptor in binding scaffold: +8
+[sar-00007] helpful=0 harmful=0 :: Alpha-haloacetamide in scaffold: +10
+
+## PROTEASE SCAFFOLD BOOST (0-20)
+[sar-00008] helpful=0 harmful=0 :: Amide bonds ≥2: +6; ≥3: +10; Lactam: +6; CF3: +2-4
+
+## RDRP NUCLEOSIDE BOOST (0-25)
+[sar-00009] helpful=0 harmful=0 :: Nucleoside-like core (MW 200-550, high TPSA, multiple O, sugar-like ring): +12
+[sar-00010] helpful=0 harmful=0 :: Prodrug esters: +6; Heteroaromatic base: +4
+
+## TMPRSS2 BOOST (0-20)
+[sar-00011] helpful=0 harmful=0 :: Guanidinium/amidinium on aromatic: +10; Ester: +4; Positive states: +2
+
+## USE MAX OF (MPROBOOST, RDRPBOOST, TMPRSS2BOOST)
+
+## ARTIFACT/NONSPECIFIC PENALTIES
+[sar-00012] helpful=0 harmful=0 :: PAINS ≥1: -15 (multiple: -25); Many cross-library alerts: -25 to -40
+[sar-00013] helpful=0 harmful=0 :: Selenium/disulfide: -20; Quinones/catechols: -10 to -25
+[sar-00014] helpful=0 harmful=0 :: Aggregation risk (logP>4.5 + aromatic≥3 + TPSA<60): -15; PAH-like: -10
+
+## LYSOSOMOTROPIC PENALTY (NONSPECIFIC IN VITRO)
+[sar-00015] helpful=0 harmful=0 :: Positive states + logP≥3 + TPSA≤60-70 + aromatic≥2: -25 to -30
+[sar-00016] helpful=0 harmful=0 :: 3/4 criteria: -15
+[sar-00017] helpful=0 harmful=0 :: Clamp to [0, 100].

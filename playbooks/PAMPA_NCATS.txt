@@ -1,0 +1,43 @@
+## GENERAL GUIDELINES
+
+## PAMPA PERMEABILITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[pam-00001] helpful=0 harmful=0 :: Probability of high passive membrane permeability (PAMPA). This is a purely passive diffusion assay — no transporters.
+
+## SCORING (BASE SCORE = 50)
+
+## UNIONIZED FRACTION (PKA-DERIVED, LARGEST DRIVER)
+[pam-00002] helpful=0 harmful=0 :: fraction_neutral ≥0.30: +20; 0.10-0.30: +10; 0.03-0.10: +0; 0.01-0.03: -10; <0.01: -20
+
+## CHARGE-STATE PENALTIES
+[pam-00003] helpful=0 harmful=0 :: |net charge| ≥2: -30
+[pam-00004] helpful=0 harmful=0 :: Zwitterion: -25
+[pam-00005] helpful=0 harmful=0 :: Ambiguous: -10
+[pam-00006] helpful=0 harmful=0 :: LogD warnings (polyprotic/amphoteric): -5
+
+## DELOCALIZED CATION EXCEPTION
+[pam-00007] helpful=0 harmful=0 :: Quaternary ammonium BUT aromatic_rings ≥2: add back +10
+
+## LIPOPHILICITY (LOGD7.4)
+[pam-00008] helpful=0 harmful=0 :: 2.0-4.0: +15; 1.0-2.0: +5; 4.0-5.0: +0; <1.0: -10; >5.0: -10
+
+## POLARITY (TPSA)
+[pam-00009] helpful=0 harmful=0 :: <60: +15; 60-90: +5; 90-120: -10; >120: -25
+
+## H-BONDING
+[pam-00010] helpful=0 harmful=0 :: HBD: 0-1 +10; 2 +5; 3 -5; ≥4 -15
+[pam-00011] helpful=0 harmful=0 :: HBA: ≤6 +5; 7-10 +0; >10 -10
+
+## SIZE/FLEXIBILITY
+[pam-00012] helpful=0 harmful=0 :: MW: <350 +10; 350-500 +0; 500-700 -10; >700 -25
+[pam-00013] helpful=0 harmful=0 :: RB: ≤5 +5; 6-10 +0; >10 -10
+
+## MACROCYCLE ADJUSTMENTS
+[pam-00014] helpful=0 harmful=0 :: If macrocycle: soften MW penalty +10
+[pam-00015] helpful=0 harmful=0 :: If macrocycle + high amide count > HBD (N-methylation proxy): +10
+
+## HARD STOPS
+[pam-00016] helpful=0 harmful=0 :: ≥2 carboxylic acids OR sulfonic/phosphonic acid: -20
+[pam-00017] helpful=0 harmful=0 :: Guanidinium: -25
+[pam-00018] helpful=0 harmful=0 :: Clamp to [0, 100].

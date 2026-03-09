@@ -1,0 +1,46 @@
+## BBB PERMEABILITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[bbb-00001] helpful=0 harmful=0 :: Probability of passive BBB permeation. Key factors: TPSA (first-order filter), lipophilicity (optimal range), ionization (neutral species favored), H-bonding, size/flexibility, and efflux risk.
+
+## CNS-MPO-LIKE SCORING (6 COMPONENTS, EACH 0-1, SUM S_PASSIVE IN [0,6])
+
+## 1) LIPOPHILICITY (LOGP TARGET ~2-4)
+[bbb-00002] helpful=0 harmful=0 :: logP 2-4: 1.0; logP 1-2 or 4-5: 0.7; logP <1 or >5: 0.3; logP >6: 0.0
+
+## 2) TPSA (BEST ~40-90)
+[bbb-00003] helpful=0 harmful=0 :: TPSA 40-90: 1.0; TPSA 20-40 or 90-120: 0.6; TPSA <20 or >120: 0.2
+
+## 3) MW (BEST ≤360)
+[bbb-00004] helpful=0 harmful=0 :: MW ≤360: 1.0; MW 360-500: 0.6; MW >500: 0.2
+
+## 4) HBD (BEST 0-1)
+[bbb-00005] helpful=0 harmful=0 :: HBD 0-1: 1.0; HBD 2: 0.7; HBD 3: 0.4; HBD ≥4: 0.0
+
+## 5) IONIZATION (FRACTION_NEUTRAL FROM LOGD ESTIMATE)
+[bbb-00006] helpful=0 harmful=0 :: f_neutral ≥0.30: 1.0; 0.10-0.30: 0.7; 0.03-0.10: 0.4; 0.01-0.03: 0.2; <0.01: 0.0
+[bbb-00007] helpful=0 harmful=0 :: If ionization is ambiguous: subtract 0.2
+
+## 6) FLEXIBILITY (ROTATABLE BONDS)
+[bbb-00008] helpful=0 harmful=0 :: RB ≤5: 1.0; RB 6-9: 0.6; RB ≥10: 0.2
+
+## HARD SHOW-STOPPERS (OVERRIDE)
+[bbb-00009] helpful=0 harmful=0 :: Permanent charge (quaternary ammonium, sulfonate): cap P at 5
+[bbb-00010] helpful=0 harmful=0 :: TPSA >120 AND net_charge ≠ 0: cap P at 10
+[bbb-00011] helpful=0 harmful=0 :: MW >650: cap P at 10
+
+## CONVERT TO PROBABILITY
+[bbb-00012] helpful=0 harmful=0 :: P0 = 100 * sigmoid(1.2 * (S_passive - 3.5))
+[bbb-00013] helpful=0 harmful=0 :: Scores ~3.5 → ~50%; scores ≥5 → high
+
+## PSA BIN ADJUSTMENT
+[bbb-00014] helpful=0 harmful=0 :: TPSA <40: P = P0 + 15
+[bbb-00015] helpful=0 harmful=0 :: TPSA >60: P = P0 - 15
+[bbb-00016] helpful=0 harmful=0 :: TPSA 40-60: if logP >2: P = P0 + 5; if logP <2: P = P0 - 10
+
+## EFFLUX-RISK PENALTY E (0 TO 30)
+[bbb-00017] helpful=0 harmful=0 :: HBA ≥8: +10
+[bbb-00018] helpful=0 harmful=0 :: ≥2 basic sites: +8
+[bbb-00019] helpful=0 harmful=0 :: TPSA ≥90 AND logP ≥3: +6
+[bbb-00020] helpful=0 harmful=0 :: ≥3 fused aromatic rings with heteroatoms: +6
+[bbb-00021] helpful=0 harmful=0 :: Then P = P - E. Clamp [0, 100].

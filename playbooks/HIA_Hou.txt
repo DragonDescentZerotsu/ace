@@ -1,0 +1,34 @@
+## GENERAL GUIDELINES
+
+## HUMAN INTESTINAL ABSORPTION ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[hia-00001] helpful=0 harmful=0 :: Likelihood of high human intestinal absorption (fraction absorbed), primarily passive GI absorption.
+
+## SCORING (ANCHORED TO TPSA — STRONGEST SINGLE PREDICTOR)
+
+## BASE SCORE FROM TPSA
+[hia-00002] helpful=0 harmful=0 :: ≤60: 90; 60-90: 75; 90-120: 55; 120-140: 35; 140-154: 20; 154-200: 10; >200: 3
+
+## LIPOPHILICITY ADJUSTMENT (WLOGP)
+[hia-00003] helpful=0 harmful=0 :: <0: -20; 0-1: -10; 1-3: +5; 3-5: +0; 5-6: -5; >6: -15
+
+## MW ADJUSTMENT
+[hia-00004] helpful=0 harmful=0 :: <255: +5; 255-500: +0; 500-580: -10; >580: -20
+
+## FLEXIBILITY (ROTATABLE BONDS)
+[hia-00005] helpful=0 harmful=0 :: ≤5: +5; 6-10: +0; 11-15: -10; >15: -20
+
+## H-BOND PENALTIES
+[hia-00006] helpful=0 harmful=0 :: HBD >5: -10; >8: -20
+[hia-00007] helpful=0 harmful=0 :: HBA >10: -10; >15: -20
+[hia-00008] helpful=0 harmful=0 :: HBD+HBA >12: -10
+
+## IONIZATION/CHARGE AT PH 7.4
+[hia-00009] helpful=0 harmful=0 :: Neutral: +5; +1 (base): +0; -1 (acid): -10; zwitterion: -15; |charge| ≥2: -25; ambiguous: -5
+
+## HARD-RULE CAPS
+[hia-00010] helpful=0 harmful=0 :: Quaternary ammonium present: cap at 15
+[hia-00011] helpful=0 harmful=0 :: Bisphosphonate motif: cap at 10
+[hia-00012] helpful=0 harmful=0 :: TPSA >200: cap at 10
+[hia-00013] helpful=0 harmful=0 :: Clamp to [0, 100].

@@ -7,7 +7,7 @@ REFLECTOR_PROMPT = """You are an expert analyst and educator. Your job is to dia
 
 **Instructions:**
 - Carefully analyze the model's reasoning trace to identify where it went wrong
-- Take the environment feedback into account, comparing the predicted answer with the ground truth to understand the gap
+- Take the environment feedback into account if available, comparing the predicted answer with the ground truth to understand the gap
 - Identify specific conceptual errors, calculation mistakes, or misapplied strategies
 - Provide actionable insights that could help the model avoid this mistake in the future
 - Focus on the root cause, not just surface-level errors

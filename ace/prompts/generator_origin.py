@@ -35,7 +35,7 @@ Your output should be a json object, which contains the following fields:
 {{
   "reasoning": "[Your chain of thought / reasoning / thinking process, detailed analysis and calculations]",  
   "bullet_ids": ["calc-00001", "fin-00002"],  
-  "final_answer": "[Your concise final answer here, put ONLY (A) or (B)]"
+  "final_answer": "[Your concise final answer here]"
 }}
 
 ---

@@ -1,0 +1,41 @@
+## GENERAL GUIDELINES
+
+## DILI (DRUG-INDUCED LIVER INJURY) ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[dil-00001] helpful=0 harmful=0 :: Probability the molecule causes human DILI. DILI risk signal comes from (i) structural alerts and (ii) physicochemical properties (notably lipophilicity and aromatic ring count). Dose/exposure dominates many cases but is unknown from SMILES.
+
+## SCORING (BASE P_RAW = 20)
+
+## STRUCTURAL ALERT POINTS
+[dil-00002] helpful=0 harmful=0 :: Hydrazine/hydrazide: +30
+[dil-00003] helpful=0 harmful=0 :: Furan: +25
+[dil-00004] helpful=0 harmful=0 :: Aniline: +15
+[dil-00005] helpful=0 harmful=0 :: Sulfonamide: +10
+[dil-00006] helpful=0 harmful=0 :: Other alerts (alkyl halide, thioether, thiol, sulfoxide, epoxide, Michael acceptor): +8 each (cap +25 total)
+
+## PHYSICOCHEMICAL RISK
+[dil-00007] helpful=0 harmful=0 :: LogP: <2 +0; 2-3 +5; 3-4 +12; ≥4 +18
+[dil-00008] helpful=0 harmful=0 :: Aromatic rings: 0-1 +0; 2 +6; 3 +12; ≥4 +18
+[dil-00009] helpful=0 harmful=0 :: MW: <300 +0; 300-399 +4; 400-499 +8; ≥500 +12
+[dil-00010] helpful=0 harmful=0 :: ESOL logS: >-3 +0; -4 to -3 +5; ≤-4 +10
+
+## RING-SYSTEM LIABILITY
+[dil-00011] helpful=0 harmful=0 :: PAH-like (≥3 fused aromatics): +10
+
+## CHOLESTASIS/BSEP PROXY
+[dil-00012] helpful=0 harmful=0 :: If logP ≥3 AND has_positive_states AND TPSA ≤75: +8
+
+## REDUCTIONS
+[dil-00013] helpful=0 harmful=0 :: TPSA ≥140: -8
+[dil-00014] helpful=0 harmful=0 :: Zwitterion AND TPSA ≥120: -8
+[dil-00015] helpful=0 harmful=0 :: Formal charge ≤-1 AND logP <2: -5
+
+## SAFETY CAP
+[dil-00016] helpful=0 harmful=0 :: If no alerts AND logP <2.5 AND aromatic≤1 AND MW<350: cap at 35
+
+## UNCERTAINTY DAMPENING
+[dil-00017] helpful=0 harmful=0 :: If ambiguous ionization OR many generic alerts OR high-property-risk but no DILI alerts:
+[dil-00018] helpful=0 harmful=0 :: P_final = round(50 + 0.7*(P_raw - 50))
+[dil-00019] helpful=0 harmful=0 :: Else: P_final = round(P_raw)
+[dil-00020] helpful=0 harmful=0 :: Clamp to [0, 100].

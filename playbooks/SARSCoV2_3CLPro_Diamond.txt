@@ -1,0 +1,46 @@
+## GENERAL GUIDELINES
+
+## SARS-COV-2 3CL PROTEASE (MPRO) ACTIVITY ASSESSMENT
+
+## THIS GUIDE HELPS GUIDE A PROBABILITY P (0-100) ASSESSMENT FOR THE TASK.
+[sar-00001] helpful=0 harmful=0 :: Probability of biochemical activity against SARS-CoV-2 Mpro. Scoring is heuristic based on covalent warheads, peptidomimetic features, and drug-likeness.
+
+## SCORING (BASE = 2)
+
+## A) COVALENT WARHEAD EVIDENCE
+[sar-00002] helpful=0 harmful=0 :: Nitrile: +28; Aldehyde: +35; Alpha-ketoamide: +25
+[sar-00003] helpful=0 harmful=0 :: Michael acceptors (acrylamide/enone): +18; Chloroacetamide: +22; Vinyl sulfone: +18
+[sar-00004] helpful=0 harmful=0 :: Warhead + gamma-lactam synergy bonus: +15
+
+## B) S1 (GLN-MIMIC) EVIDENCE
+[sar-00005] helpful=0 harmful=0 :: Gamma-lactam/2-pyrrolidinone: +18
+[sar-00006] helpful=0 harmful=0 :: Else triazole/imidazole/indazole: +8
+
+## C) BACKBONE (PEPTIDOMIMETIC)
+[sar-00007] helpful=0 harmful=0 :: Amide bonds ≥2: +10; ≥3: additional +5
+[sar-00008] helpful=0 harmful=0 :: Amide bonds=0 AND no heteroaromatic: -10
+
+## D) S2 HYDROPHOBE PLAUSIBILITY
+[sar-00009] helpful=0 harmful=0 :: logP 1.5-4.0: +6
+[sar-00010] helpful=0 harmful=0 :: Largest ring system ≥2 AND not PAH: +3
+[sar-00011] helpful=0 harmful=0 :: PAH-like: -10
+
+## E) DRUG-LIKENESS
+[sar-00012] helpful=0 harmful=0 :: MW 250-650: +4 else -6
+[sar-00013] helpful=0 harmful=0 :: TPSA 50-140: +4; >170: -10
+[sar-00014] helpful=0 harmful=0 :: HBA 4-11 AND HBD 0-3: +3 else -4
+[sar-00015] helpful=0 harmful=0 :: |charge| <2: +2 else -12
+[sar-00016] helpful=0 harmful=0 :: QED ≥0.35: +2 else -3
+[sar-00017] helpful=0 harmful=0 :: Poorly soluble: -6
+
+## F) ALERT PENALTIES
+[sar-00018] helpful=0 harmful=0 :: Epoxide/aziridine: -12; Nitroso: -10; Aryl nitro: -6
+
+## PROBABILITY MAPPING
+[sar-00019] helpful=0 harmful=0 :: Use logistic: P = 100 / (1 + exp(-(score/12 - 0.5)))
+[sar-00020] helpful=0 harmful=0 :: Or table: ≤-10→0-5%, -9 to 0→5-15%, 1-10→15-35%, 11-25→35-65%, 26-45→65-85%, 46-60→85-95%, >60→95-99%
+
+## OVERRIDES
+[sar-00021] helpful=0 harmful=0 :: Warhead + gamma-lactam + amides≥2 + logP 1-4: P = max(P, 85)
+[sar-00022] helpful=0 harmful=0 :: MW<180 + no warhead + no rings: P = min(P, 10)
+[sar-00023] helpful=0 harmful=0 :: |charge|≥2 + TPSA>180: P = min(P, 15)

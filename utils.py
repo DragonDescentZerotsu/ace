@@ -11,34 +11,45 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Load environment variables from .env file
 load_dotenv()
 
-def initialize_clients(api_provider):
-    """Initialize separate clients for generator, reflector, and curator"""
-    if api_provider == "sambanova":
-        # Use SambaNova API
-        base_url = "https://api.sambanova.ai/v1"
+def get_client(provider, base_url=None):
+    if provider == "sambanova":
+        default_base_url = "https://api.sambanova.ai/v1"
         api_key = os.getenv('SAMBANOVA_API_KEY', '')
-        if not api_key:
-            raise ValueError("SambaNova api key not found in environment variables")
-    elif api_provider == "together":
-        # Use Together API
-        base_url = "https://api.together.xyz/v1"
+    elif provider == "together":
+        default_base_url = "https://api.together.xyz/v1"
         api_key = os.getenv('TOGETHER_API_KEY', '')
-        if not api_key:
-            raise ValueError("Together api key not found in environment variables")
-    elif api_provider == "openai":
-        # Use OpenAI API
-        base_url = "https://api.openai.com/v1"
+    elif provider == "openai":
+        default_base_url = "https://api.openai.com/v1"
         api_key = os.getenv('OPENAI_API_KEY', '')
-        if not api_key:
-            raise ValueError("OpenAI api key not found in environment variables")
+    elif provider == "openrouter":
+        default_base_url = "https://openrouter.ai/api/v1"
+        api_key = os.getenv('OPENROUTER_API_KEY_Mark_3', '')
+    elif provider in ["vllm", "local", "ollama", "lmstudio"]:
+        default_base_url = "http://localhost:8000/v1"
+        api_key = os.getenv('LOCAL_API_KEY', 'local')
     else:
-        raise ValueError((f"Invalid api_provider name: {api_provider}. Must be 'sambanova', 'together', or 'openai'"))
-        
-    generator_client = openai.OpenAI(api_key=api_key, base_url=base_url)
-    reflector_client = openai.OpenAI(api_key=api_key, base_url=base_url)
-    curator_client = openai.OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(f"Invalid api_provider name: {provider}. Must be 'sambanova', 'together', 'openai', 'openrouter', 'vllm', 'ollama', 'lmstudio', or 'local'")
     
-    print("Using Together API for all models")
+    if not api_key:
+        raise ValueError(f"{provider} api key not found in environment variables")
+        
+    final_base_url = base_url if base_url else default_base_url
+    return openai.OpenAI(api_key=api_key, base_url=final_base_url)
+
+def initialize_clients(api_provider,
+                       generator_base_url=None, generator_api_provider=None,
+                       reflector_base_url=None, reflector_api_provider=None,
+                       curator_base_url=None, curator_api_provider=None):
+    """Initialize separate clients for generator, reflector, and curator"""
+    gen_provider = generator_api_provider or api_provider
+    ref_provider = reflector_api_provider or api_provider
+    cur_provider = curator_api_provider or api_provider
+
+    generator_client = get_client(gen_provider, generator_base_url)
+    reflector_client = get_client(ref_provider, reflector_base_url)
+    curator_client = get_client(cur_provider, curator_base_url)
+    
+    print(f"Initialized clients - Generator: {gen_provider}, Reflector: {ref_provider}, Curator: {cur_provider}")
     return generator_client, reflector_client, curator_client
 
 def get_section_slug(section_name):
@@ -90,62 +101,67 @@ def extract_boxed_content(text):
     return None
 
 def extract_answer(response):
-    """Extract final answer from model response"""
+    """Extract final answer from model response.
+    
+    Returns:
+        The extracted answer string, or None if no parseable answer was found.
+    """
     try:
         # First try JSON parsing
         parsed = json.loads(response)
-        answer = str(parsed.get("final_answer", "No final answer found"))
-        return answer  
+        answer = parsed.get("final_answer", None)
+        if answer is not None:
+            return str(answer)
             
     except (json.JSONDecodeError, KeyError, AttributeError):
-        # JSON parsing failed, use fallback logic
-        matches = re.findall(r"Finish\[(.*?)\]", response)
-        if matches:
-            answer = matches[-1]
+        pass
+
+    # JSON parsing failed, use fallback logic
+    matches = re.findall(r"Finish\[(.*?)\]", response)
+    if matches:
+        return matches[-1]
+    
+    # Try to get final answer from JSON style response with regex matching 
+    # Try double quotes first
+    matches = re.findall(r'"final_answer"\s*:\s*"([^"]*)"', response)
+    if matches:
+        return matches[-1]
+    
+    # Try single quotes
+    matches = re.findall(r"'final_answer'\s*:\s*'([^']*)'", response)
+    if matches:
+        return matches[-1]
+    
+    # Handle JSON format without quotes (for simple expressions)
+    matches = re.findall(r"""['"']final_answer['"']\s*:\s*([^,}]+)""", response)
+    if matches:
+        answer = matches[-1].strip()
+        # Clean up trailing characters
+        answer = re.sub(r'[,}]*$', '', answer)
+        return answer
+    
+    # Fallback for "The final answer is: X" pattern with boxed
+    final_answer_pattern = r'[Tt]he final answer is:?\s*\$?\\boxed\{'
+    match = re.search(final_answer_pattern, response)
+    if match:
+        # Extract boxed content starting from this match
+        remaining_text = response[match.start():]
+        boxed_content = extract_boxed_content(remaining_text)
+        if boxed_content:
+            return boxed_content
+    
+    # More general pattern for "final answer is X"
+    matches = re.findall(r'[Tt]he final answer is:?\s*([^\n.]+)', response)
+    if matches:
+        answer = matches[-1].strip()
+        # Clean up common formatting
+        answer = re.sub(r'^\$?\\boxed\{([^}]+)\}\$?$', r'\1', answer)
+        answer = answer.replace('$', '').strip()
+        if answer:
             return answer
-        
-        # Try to get final answer from JSON style response with regex matching 
-        # Try double quotes first
-        matches = re.findall(r'"final_answer"\s*:\s*"([^"]*)"', response)
-        if matches:
-            answer = matches[-1]
-            return answer
-        
-        # Try single quotes
-        matches = re.findall(r"'final_answer'\s*:\s*'([^']*)'", response)
-        if matches:
-            answer = matches[-1]
-            return answer
-        
-        # Handle JSON format without quotes (for simple expressions)
-        matches = re.findall(r'[\'"]final_answer[\'"]\s*:\s*([^,}]+)', response)
-        if matches:
-            answer = matches[-1].strip()
-            # Clean up trailing characters
-            answer = re.sub(r'[,}]*$', '', answer)
-            return answer
-        
-        # Fallback for "The final answer is: X" pattern with boxed
-        final_answer_pattern = r'[Tt]he final answer is:?\s*\$?\\boxed\{'
-        match = re.search(final_answer_pattern, response)
-        if match:
-            # Extract boxed content starting from this match
-            remaining_text = response[match.start():]
-            boxed_content = extract_boxed_content(remaining_text)
-            if boxed_content:
-                return boxed_content
-        
-        # More general pattern for "final answer is X"
-        matches = re.findall(r'[Tt]he final answer is:?\s*([^\n.]+)', response)
-        if matches:
-            answer = matches[-1].strip()
-            # Clean up common formatting
-            answer = re.sub(r'^\$?\\boxed\{([^}]+)\}\$?$', r'\1', answer)
-            answer = answer.replace('$', '').strip()
-            if answer:
-                return answer
-        
-        return "No final answer found"
+    
+    # All patterns failed — could not parse an answer
+    return None
     
 enc = tiktoken.get_encoding("cl100k_base")
 def count_tokens(prompt: str) -> int:
@@ -154,36 +170,45 @@ def count_tokens(prompt: str) -> int:
 
 def evaluate_single_test_sample(args_tuple, data_processor) -> Tuple[Dict, str]:
     """
-    Evaluate a single test sample - task-agnostic implementation.
+    Evaluate a single test sample with parse-retry support.
     
     Args:
-        args_tuple: Tuple of (index, task_dict, generator, playbook, max_tokens, log_dir, use_json_mode)
+        args_tuple: Tuple of (index, task_dict, generator, playbook, max_tokens, log_dir,
+                              use_json_mode, max_parse_retries)
         data_processor: DataProcessor instance with answer_is_correct method
     """
-    (i, task_dict, generator, playbook, max_tokens, log_dir, use_json_mode) = args_tuple
+    (i, task_dict, generator, playbook, max_tokens, log_dir, use_json_mode, max_parse_retries) = args_tuple
     try:
         context = task_dict["context"]
         question = task_dict["question"]
         target = task_dict["target"]
 
-        gen_response, bullet_ids, call_info = generator.generate(
-            question=question,
-            playbook=playbook,
-            context=context,
-            reflection="(empty)",
-            use_json_mode=use_json_mode,
-            call_id=f"test_eval_{i}",
-            log_dir=log_dir
-        )
+        final_answer = None
+        for attempt in range(max_parse_retries + 1):
+            if attempt > 0:
+                print(f"[eval] Sample {i}: parse retry {attempt}/{max_parse_retries}")
+            gen_response, bullet_ids, call_info = generator.generate(
+                question=question,
+                playbook=playbook,
+                context=context,
+                reflection="(empty)",
+                use_json_mode=use_json_mode,
+                call_id=f"test_eval_{i}_attempt_{attempt}",
+                log_dir=log_dir
+            )
+            final_answer = extract_answer(gen_response)
+            if final_answer is not None:
+                break
 
-        final_answer = extract_answer(gen_response)
-        is_correct = data_processor.answer_is_correct(final_answer, target)
+        parse_failed = (final_answer is None)
+        is_correct = (not parse_failed) and data_processor.answer_is_correct(final_answer, target)
 
         return {
             "index": i,
             "final_answer": final_answer,
             "target": target,
             "is_correct": is_correct,
+            "parse_failed": parse_failed,
             "success": True
         }, None
 
@@ -193,29 +218,39 @@ def evaluate_single_test_sample(args_tuple, data_processor) -> Tuple[Dict, str]:
 
 def evaluate_test_set(data_processor, generator, playbook, test_samples,
                       max_tokens=4096, log_dir=None, max_workers=20, 
-                      use_json_mode=False) -> Tuple[Dict, Dict]:
+                      use_json_mode=False, eval_label="TEST SET",
+                      max_parse_retries=4) -> Tuple[Dict, Dict]:
     """
     Parallel evaluation of test set - task-agnostic implementation.
     
     Args:
         data_processor: DataProcessor instance with answer_is_correct and evaluate_accuracy methods
-        generator: Generator instance
+        generator: A single Generator instance, or a list of Generator instances.
+                   When a list is provided, samples are distributed round-robin across
+                   all generators so that multiple servers are used in parallel.
         playbook: Current playbook string
         test_samples: List of test samples
         max_tokens: Max tokens for generation
         log_dir: Directory for logs
         max_workers: Number of parallel workers
         use_json_mode: Whether to use JSON mode
+        eval_label: Label for the evaluation header (e.g., "TEST SET", "VALIDATION SET")
+        max_parse_retries: Max number of extra generation attempts when answer parsing fails.
         
     Returns:
         Tuple of (results_dict, error_logs_dict)
     """
+    # Normalise: always work with a list of generators
+    generators = generator if isinstance(generator, list) else [generator]
+    num_servers = len(generators)
+
     print(f"\n{'='*40}")
-    print(f"EVALUATING TEST SET - {len(test_samples)} samples, {max_workers} workers")
+    print(f"EVALUATING {eval_label} - {len(test_samples)} samples, {max_workers} workers, {num_servers} server(s)")
     print(f"{'='*40}")
 
+    # Distribute samples round-robin across the generator pool
     args_list = [
-        (i, sample, generator, playbook, max_tokens, log_dir, use_json_mode)
+        (i, sample, generators[i % num_servers], playbook, max_tokens, log_dir, use_json_mode, max_parse_retries)
         for i, sample in enumerate(test_samples)
     ]
 
@@ -242,20 +277,30 @@ def evaluate_test_set(data_processor, generator, playbook, test_samples,
                 continue
 
             if result and result["success"]:
-                results["correct"] += (1 if result["is_correct"] else 0)
-                results["total"] += 1
-                results["answers"].append(result["final_answer"])
-                results["targets"].append(result["target"])
+                parse_failed = result.get("parse_failed", result["final_answer"] is None)
                 
-                if not result["is_correct"]:
+                if parse_failed:
+                    # Parse failure: count as wrong but do NOT append None to answers list
+                    # (None would crash evaluate_accuracy / answer_is_correct)
+                    results["total"] += 1
+                    results["no_answer"] += 1
                     results["errors"].append({
                         "index": result["index"],
-                        "prediction": result["final_answer"],
+                        "prediction": None,
                         "ground_truth": result["target"]
                     })
-                
-                if result["final_answer"] == "No final answer found":
-                    results["no_answer"] += 1
+                else:
+                    results["correct"] += (1 if result["is_correct"] else 0)
+                    results["total"] += 1
+                    results["answers"].append(result["final_answer"])
+                    results["targets"].append(result["target"])
+                    
+                    if not result["is_correct"]:
+                        results["errors"].append({
+                            "index": result["index"],
+                            "prediction": result["final_answer"],
+                            "ground_truth": result["target"]
+                        })
 
             if i % 50 == 0:
                 curr_acc = results["correct"] / results["total"] if results["total"] > 0 else 0
@@ -271,14 +316,20 @@ def evaluate_test_set(data_processor, generator, playbook, test_samples,
             "no_answer": results["no_answer"]
         }
         
+        # Compute macro F1 if the data processor supports it
+        if hasattr(data_processor, 'evaluate_f1'):
+            macro_f1 = data_processor.evaluate_f1(results["answers"], results["targets"])
+            final_results["macro_f1"] = macro_f1
+        
         error_logs = {
             "accuracy": accuracy,
             "errors": results["errors"]
         }
         
-        print(f"\n📊 Final Accuracy: {accuracy:.3f} ({results['correct']}/{results['total']})")
+        f1_str = f", Macro F1: {final_results['macro_f1']:.3f}" if "macro_f1" in final_results else ""
+        print(f"\n📊 Final Accuracy: {accuracy:.3f} ({results['correct']}/{results['total']}){f1_str}")
     else:
-        results = {"accuracy": 0.0, "correct": 0, "total": 0}
+        final_results = {"accuracy": 0.0, "correct": 0, "total": 0}
         error_logs = {}
         print(f"\n📊 No valid results!")
         
