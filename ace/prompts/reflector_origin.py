@@ -3,10 +3,7 @@ Reflector prompts for ACE system.
 """
 
 # Enhanced Reflector prompt that outputs bullet tags
-REFLECTOR_PROMPT = """You are an expert error analyst for molecular reasoning systems.
-
-Your job is NOT to optimize for the current example alone.
-Your job is to determine whether the failure reveals a GENERALIZABLE weakness in the playbook for this molecular task.
+REFLECTOR_PROMPT = """You are an expert analyst and educator. Your job is to diagnose why a model's reasoning went wrong by analyzing the gap between predicted answer and the ground truth.
 
 **Instructions:**
 - Carefully analyze the model's reasoning trace to identify where it went wrong
@@ -24,8 +21,6 @@ Your output should be a json object, which contains the following fields
   - root_cause_analysis: why did this error occur? What concept was misunderstood?
   - correct_approach: what should the model have done instead?
   - key_insight: what strategy, formula, or principle should be remembered to avoid this error?
-  - anti_overfit_note: explain why this is or is not generalizable
-  - should_update_playbook: true or false
   - bullet_tags: a list of json objects with bullet_id and tag for each bulletpoint used by the generator
 
 
@@ -56,8 +51,6 @@ Your output should be a json object, which contains the following fields
   "root_cause_analysis": "[Why did this error occur? What concept was misunderstood?]",
   "correct_approach": "[What should the model have done instead?]",
   "key_insight": "[What strategy, formula, or principle should be remembered to avoid this error?]",
-  "anti_overfit_note": "[Explain why this is or is not generalizable]",
-  "should_update_playbook": "[True or False]",
   "bullet_tags": [
     {{"id": "calc-00001", "tag": "helpful"}},
     {{"id": "fin-00002", "tag": "harmful"}}

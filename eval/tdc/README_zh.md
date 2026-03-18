@@ -200,9 +200,8 @@ cd /data1/tianang/Projects/ace
 .venv/bin/python -m eval.tdc.run \
   --task_name AMES \
   --mode eval_only \
+  --eval_split valid \
   --generator_model <模型名> \
-  --reflector_model <模型名> \
-  --curator_model <模型名> \
   --initial_playbook_path ./results/tdc/best_playbook.txt \
   --save_path ./results/tdc_eval
 ```
@@ -217,6 +216,7 @@ cd /data1/tianang/Projects/ace
 | `--run_all` | `false` | 运行全部 16 个任务 |
 | `--data_dir` | `<预处理数据路径>` | 数据根目录 |
 | `--mode` | `offline` | `offline` / `online` / `eval_only` |
+| `--eval_split` | `test` | `eval_only` 模式下的评估数据集（`test` 或 `valid`） |
 | `--generator_model` | *必填* | 8001 端口上的模型名 |
 | `--reflector_model` | *必填* | OpenRouter 模型名 |
 | `--curator_model` | *必填* | 8000 端口上的模型名 |

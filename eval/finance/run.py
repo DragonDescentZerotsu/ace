@@ -50,6 +50,9 @@ def parse_args():
                         help="Run curator every N steps")
     parser.add_argument("--curator_on_correction_only", action="store_true",
                         help="Only run curator when reflection corrects a wrong answer")
+    parser.add_argument("--val_gated_curator", action="store_true",
+                        help="After each curator update, run a parallel dev-set F1 eval "
+                             "and roll back if F1 does not improve (offline mode only)")
     parser.add_argument("--eval_steps", type=int, default=100,
                         help="Evaluate every N steps")
     parser.add_argument("--online_eval_frequency", type=int, default=15,
@@ -213,6 +216,7 @@ def main():
         'max_num_rounds': args.max_num_rounds,
         'curator_frequency': args.curator_frequency,
         'curator_on_correction_only': args.curator_on_correction_only,
+        'val_gated_curator': args.val_gated_curator,
         'eval_steps': args.eval_steps,
         'online_eval_frequency': args.online_eval_frequency,
         'save_steps': args.save_steps,

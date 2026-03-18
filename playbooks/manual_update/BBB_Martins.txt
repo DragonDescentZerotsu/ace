@@ -1,0 +1,98 @@
+## BBB PERMEABILITY ASSESSMENT — CLEAN VERSION
+
+## THIS GUIDE ESTIMATES A PROBABILITY P (0-100) OF PASSIVE BBB PERMEATION.
+[bbb-clean-00001] Predict the probability of passive BBB permeation. The main factors are lipophilicity, polarity (TPSA), molecular size, hydrogen-bond donation, ionization state, flexibility, and a limited efflux-risk heuristic.
+
+## GENERAL EXECUTION RULES
+[bbb-clean-00002] Focus on passive BBB permeation. Do not introduce extra medicinal-chemistry heuristics, scaffold boosts, or penalties unless explicitly listed below.
+[bbb-clean-00003] Use the workflow exactly in this order: (1) parent-fragment normalization, (2) descriptor scoring, (3) probability conversion, (4) PSA adjustment, (5) efflux penalty, (6) clamp to 0-100, (7) apply hard caps, (8) assign final class.
+[bbb-clean-00004] Unless otherwise stated, numeric bins are lower-inclusive and upper-exclusive.
+[bbb-clean-00005] If a required descriptor is missing and the probability cannot be computed, assign P = 50 and classify as B.
+
+## PARENT-FRAGMENT NORMALIZATION
+[bbb-clean-00006] If the input SMILES contains multiple fragments ('.'), or is clearly a salt / counter-ion form, isolate the active organic parent (free base or free acid) and compute descriptors on the parent only.
+[bbb-clean-00007] Ignore inorganic counter-ions and descriptor contributions from non-parent fragments.
+[bbb-clean-00008] If parent isolation fails, proceed conservatively using the available descriptors, but do not invent extra penalties beyond the rules below.
+
+## OPTIONAL QUICK HEURISTIC CHECK (NON-SCORING)
+[bbb-clean-00009] Before formal scoring, briefly assess whether the molecule satisfies these favorable features: TPSA ≤ 90 Å², HBD ≤ 1, lipophilicity in the approximate 2-4 range (logP or logD7.4), MW not excessively large, and limited flexibility. This check is only for reasoning context and does not change the numeric score.
+
+## CNS-MPO-LIKE SCORING
+[bbb-clean-00010] Compute six component scores, each in [0,1]. The passive score is the simple sum:
+[bbb-clean-00011] S_passive = S_logP + S_TPSA + S_MW + S_HBD + S_ionization + S_RB
+
+## 1) LIPOPHILICITY
+[bbb-clean-00012] Use logP as the primary lipophilicity descriptor. If logP is unavailable, use logD7.4 as a surrogate.
+[bbb-clean-00013] logP < 0 -> 0.0
+[bbb-clean-00014] 0 ≤ logP < 1 -> 0.3
+[bbb-clean-00015] 1 ≤ logP < 2 -> 0.7
+[bbb-clean-00016] 2 ≤ logP < 4 -> 1.0
+[bbb-clean-00017] 4 ≤ logP < 5 -> 0.7
+[bbb-clean-00018] 5 ≤ logP < 6 -> 0.3
+[bbb-clean-00019] logP ≥ 6 -> 0.0
+
+## 2) TPSA
+[bbb-clean-00020] 20 ≤ TPSA < 40 Å² -> 0.6
+[bbb-clean-00021] 40 ≤ TPSA < 90 Å² -> 1.0
+[bbb-clean-00022] 90 ≤ TPSA < 120 Å² -> 0.6
+[bbb-clean-00023] TPSA < 20 Å² or TPSA ≥ 120 Å² -> 0.2
+
+## 3) MOLECULAR WEIGHT
+[bbb-clean-00024] MW ≤ 360 -> 1.0
+[bbb-clean-00025] 360 < MW ≤ 500 -> 0.6
+[bbb-clean-00026] MW > 500 -> 0.2
+
+## 4) HYDROGEN-BOND DONORS
+[bbb-clean-00027] HBD 0-1 -> 1.0
+[bbb-clean-00028] HBD 2 -> 0.7
+[bbb-clean-00029] HBD 3 -> 0.4
+[bbb-clean-00030] HBD ≥ 4 -> 0.0
+
+## 5) IONIZATION
+[bbb-clean-00031] Use fraction_neutral at pH 7.4 if available.
+[bbb-clean-00032] fraction_neutral ≥ 0.30 -> 1.0
+[bbb-clean-00033] 0.10 ≤ fraction_neutral < 0.30 -> 0.7
+[bbb-clean-00034] 0.03 ≤ fraction_neutral < 0.10 -> 0.4
+[bbb-clean-00035] 0.01 ≤ fraction_neutral < 0.03 -> 0.2
+[bbb-clean-00036] fraction_neutral < 0.01 -> 0.0
+[bbb-clean-00037] Do not apply any extra ambiguity penalty or bonus. Use only the ionization score above in all downstream calculations.
+
+## 6) FLEXIBILITY
+[bbb-clean-00038] RB ≤ 5 -> 1.0
+[bbb-clean-00039] 6 ≤ RB ≤ 9 -> 0.6
+[bbb-clean-00040] RB ≥ 10 -> 0.2
+
+## HARD CAPS
+[bbb-clean-00041] Permanent charge (e.g., quaternary ammonium or sulfonate) -> cap final P at 5.
+[bbb-clean-00042] Strong acidic group with very low neutral fraction at pH 7.4 (e.g., carboxylic acid / sulfonic acid with fraction_neutral < 0.01) -> cap final P at 5.
+[bbb-clean-00043] MW > 650 -> cap final P at 10.
+[bbb-clean-00044] No other hard caps are active.
+
+## CONVERT TO BASE PROBABILITY
+[bbb-clean-00045] P0 = 100 * sigmoid(1.2 * (S_passive - 3.5))
+[bbb-clean-00046] Interpretation: S_passive around 3.5 corresponds to roughly 50%; higher scores indicate greater BBB permeability.
+
+## PSA BIN ADJUSTMENT
+[bbb-clean-00047] If TPSA < 40 Å², then P = P0 + 15.
+[bbb-clean-00048] If TPSA ≥ 120 Å², then P = P0 - 15.
+[bbb-clean-00049] No other TPSA post-hoc bonuses or penalties are allowed.
+
+## EFFLUX-RISK PENALTY
+[bbb-clean-00050] Apply a single efflux penalty E = 8 only when BOTH conditions are satisfied:
+[bbb-clean-00051] (a) the molecule contains at least two aliphatic basic nitrogens with individual pKa ≥ 7, determined by substructure analysis;
+[bbb-clean-00052] (b) either TPSA > 60 Å² OR the ionization component score is < 0.3.
+[bbb-clean-00053] Otherwise, E = 0.
+[bbb-clean-00054] Do not use aggregated descriptor fields such as num_basic_sites for this check.
+[bbb-clean-00055] Do not apply HBA-based, fused-ring-based, or additional polarity-based efflux penalties.
+[bbb-clean-00056] After this step, P = P - E.
+
+## FINALIZATION
+[bbb-clean-00057] Clamp P to the range 0-100.
+[bbb-clean-00058] Then apply hard caps from [bbb-clean-00041] to [bbb-clean-00043].
+[bbb-clean-00059] Final class: if P ≥ 50 -> B; else -> A.
+[bbb-clean-00060] If P = 50 exactly, classify as B.
+
+## OUTPUT FORMAT
+[bbb-clean-00061] Provide a concise reasoning summary covering: lipophilicity, TPSA, MW, HBD, ionization, RB, and whether the efflux penalty applies.
+[bbb-clean-00062] Then report the final probability P and output exactly one final class token: B or A.
+[bbb-clean-00063] Never return an empty answer.

@@ -172,6 +172,7 @@ class ACE:
             'bulletpoint_analyzer_threshold': config.get('bulletpoint_analyzer_threshold', 0.90),
             'curator_on_correction_only': config.get('curator_on_correction_only', False),
             'max_parse_retries': config.get('max_parse_retries', 4),
+            'val_gated_curator': config.get('val_gated_curator', False),
         }
     
     def _setup_paths(self, save_dir: str, task_name: str, mode: str) -> Tuple[str, str]:
@@ -334,6 +335,12 @@ class ACE:
             print(f"\n{'='*60}")
             print(f"STARTING OFFLINE TRAINING")
             print(f"{'='*60}\n")
+            
+            # Use initial validation F1 as the starting baseline for val-gated curator
+            initial_val_f1 = 0.0
+            if 'initial_val_results' in results and 'macro_f1' in results['initial_val_results']:
+                initial_val_f1 = results['initial_val_results']['macro_f1']
+                
             training_results = self._offline_train(
                 train_samples=train_samples,
                 val_samples=val_samples,
@@ -342,7 +349,8 @@ class ACE:
                 save_path=save_path,
                 usage_log_path=usage_log_path,
                 playbook_dir=playbook_dir,
-                log_dirs=log_dirs
+                log_dirs=log_dirs,
+                initial_val_f1=initial_val_f1
             )
             results['training_results'] = training_results
             
@@ -419,6 +427,14 @@ class ACE:
             print(f"\n{'='*60}")
             print(f"RUNNING TEST")
             print(f"{'='*60}\n")
+            
+            # Determine evaluation label
+            eval_split = config.get('eval_split', 'test')
+            if eval_split == 'train':
+                eval_label = "TRAIN SET"
+            else:
+                eval_label = "TEST SET" if eval_split == 'test' else "VALIDATION SET"
+            
             test_results = self._run_test(
                 test_samples=test_samples,
                 data_processor=data_processor,
@@ -426,7 +442,8 @@ class ACE:
                 config=config,
                 log_dir=log_dirs["test"],
                 save_path=save_path,
-                prefix="test"
+                prefix="test",
+                eval_label=eval_label
             )
             results['test_results'] = test_results
         
@@ -448,21 +465,26 @@ class ACE:
                 print(f"Initial Validation Accuracy: {results['initial_val_results']['accuracy']:.3f}{init_val_f1_str}")
             if 'initial_test_results' in results:
                 init_f1_str = f" (Macro F1: {results['initial_test_results']['macro_f1']:.3f})" if 'macro_f1' in results['initial_test_results'] else ""
-                print(f"Initial Test Accuracy: {results['initial_test_results']['accuracy']:.3f}{init_f1_str}")
+                init_parse_str = f" (Parse Failed: {results['initial_test_results']['no_answer']})" if results['initial_test_results'].get('no_answer', 0) > 0 else ""
+                print(f"Initial Test Accuracy: {results['initial_test_results']['accuracy']:.3f}{init_f1_str}{init_parse_str}")
             if 'final_val_results' in results:
                 final_val_f1_str = f" (Macro F1: {results['final_val_results']['macro_f1']:.3f})" if 'macro_f1' in results['final_val_results'] else ""
                 print(f"Final Validation Accuracy: {results['final_val_results']['accuracy']:.3f}{final_val_f1_str}")
             if 'final_test_results' in results:
                 final_f1_str = f" (Macro F1: {results['final_test_results']['macro_f1']:.3f})" if 'macro_f1' in results['final_test_results'] else ""
-                print(f"Final Test Accuracy: {results['final_test_results']['accuracy']:.3f}{final_f1_str}")
+                final_parse_str = f" (Parse Failed: {results['final_test_results']['no_answer']})" if results['final_test_results'].get('no_answer', 0) > 0 else ""
+                print(f"Final Test Accuracy: {results['final_test_results']['accuracy']:.3f}{final_f1_str}{final_parse_str}")
         elif mode == 'online':
             init_f1_str = f" (Macro F1: {results['initial_test_results']['macro_f1']:.3f})" if 'macro_f1' in results.get('initial_test_results', {}) else ""
+            init_parse_str = f" (Parse Failed: {results['initial_test_results'].get('no_answer', 0)})" if results.get('initial_test_results', {}).get('no_answer', 0) > 0 else ""
             final_f1_str = f" (Macro F1: {results['online_test_results'].get('macro_f1', 0):.3f})" if 'macro_f1' in results.get('online_test_results', {}) else ""
-            print(f"Initial Test Accuracy: {results['initial_test_results']['accuracy']:.3f}{init_f1_str}")
-            print(f"Final Test Accuracy: {results['online_test_results']['accuracy']:.3f}{final_f1_str}")
+            final_parse_str = f" (Parse Failed: {results['online_test_results'].get('no_answer', 0)})" if results.get('online_test_results', {}).get('no_answer', 0) > 0 else ""
+            print(f"Initial Test Accuracy: {results['initial_test_results']['accuracy']:.3f}{init_f1_str}{init_parse_str}")
+            print(f"Final Test Accuracy: {results['online_test_results']['accuracy']:.3f}{final_f1_str}{final_parse_str}")
         else:  # eval_only
             f1_str = f" (Macro F1: {results['test_results']['macro_f1']:.3f})" if 'macro_f1' in results.get('test_results', {}) else ""
-            print(f"Test Accuracy: {results['test_results']['accuracy']:.3f}{f1_str}")
+            parse_fail_str = f" (Parse Failed: {results['test_results'].get('no_answer', 0)})" if results.get('test_results', {}).get('no_answer', 0) > 0 else ""
+            print(f"Test Accuracy: {results['test_results']['accuracy']:.3f}{f1_str}{parse_fail_str}")
         print(f"Results saved to: {save_path}")
         print(f"{'='*60}\n")
         
@@ -761,6 +783,160 @@ class ACE:
         
         return pre_train_answer, post_train_answer, tracking_dict
     
+    def _reflect_and_curate_sample(
+        self,
+        sample_result: Dict[str, Any],
+        data_processor,
+        step_id: str,
+        step: int,
+        epoch: int,
+        usage_log_path: str,
+        log_dir: str,
+        config_params: Dict[str, Any],
+        total_samples: int,
+        val_samples: Optional[List[Dict[str, Any]]] = None,
+        log_dir_valid: Optional[str] = None,
+        current_best_val_f1: float = 0.0,
+    ) -> Tuple[bool, float]:
+        """
+        Reflection + curation for a single pre-sampled incorrect training sample.
+
+        Runs up to max_num_rounds of (reflect → regenerate) iterations.
+        If the answer is corrected, curator is called immediately and playbook
+        is updated in-place (same as the existing per-step behaviour).
+        BulletpointAnalyzer is NOT called here; it is called once per epoch
+        by the caller (_offline_train).
+
+        When val_gated_curator is enabled (via config_params) and val_samples is
+        provided, a parallel dev-set F1 evaluation is run immediately after each
+        curator call.  If the new F1 does not exceed current_best_val_f1 the
+        playbook is rolled back to its pre-curator state.
+
+        Args:
+            sample_result: Result dict from parallel_sample_train_batch.
+            data_processor: DataProcessor instance.
+            step_id: Unique identifier string for this step.
+            step: 1-indexed step number within the epoch.
+            epoch: Current epoch number.
+            usage_log_path: Path for bullet usage logging.
+            log_dir: Directory for detailed LLM logs.
+            config_params: Configuration parameters dictionary.
+            total_samples: Total number of training samples (for curator context).
+            val_samples: Validation samples used for the F1 gate (offline only).
+            log_dir_valid: Log directory for validation-phase LLM calls.
+            current_best_val_f1: Best val macro-F1 seen so far; used as the
+                acceptance threshold for val_gated_curator.
+
+        Returns:
+            Tuple of (corrected, current_best_val_f1) where corrected is True if
+            the sample was answered correctly after reflection, and
+            current_best_val_f1 is the (possibly updated) best val F1.
+        """
+        max_num_rounds    = config_params['max_num_rounds']
+        token_budget      = config_params['token_budget']
+        use_json_mode     = config_params['use_json_mode']
+        no_ground_truth   = config_params['no_ground_truth']
+        val_gated_curator = config_params.get('val_gated_curator', False)
+        test_workers      = config_params.get('test_workers', 20)
+        max_parse_retries = config_params.get('max_parse_retries', 4)
+
+        question      = sample_result['sample'].get('question', '')
+        context       = sample_result['sample'].get('context', '')
+        target        = sample_result['target']
+        gen_response  = sample_result['gen_response']
+        bullet_ids    = sample_result['bullet_ids']
+        final_answer  = sample_result['final_answer']
+
+        corrected = False
+        reflection_content = "(empty)"
+
+        for round_num in range(max_num_rounds):
+            print(f"  Reflection round {round_num + 1}/{max_num_rounds}")
+
+            playbook_bullets = extract_playbook_bullets(self.playbook, bullet_ids)
+
+            reflection_content, bullet_tags, _ = self.reflector.reflect(
+                question=question,
+                reasoning_trace=gen_response,
+                predicted_answer=final_answer,
+                ground_truth=target if not no_ground_truth else None,
+                environment_feedback="Predicted answer does not match ground truth",
+                bullets_used=playbook_bullets,
+                use_ground_truth=not no_ground_truth,
+                use_json_mode=use_json_mode,
+                call_id=f"{step_id}_round_{round_num}",
+                log_dir=log_dir,
+            )
+
+            if bullet_tags:
+                self.playbook = update_bullet_counts(self.playbook, bullet_tags)
+
+            gen_response, bullet_ids, _ = self.generator.generate(
+                question=question,
+                playbook=self.playbook,
+                context=context,
+                reflection=reflection_content,
+                use_json_mode=use_json_mode,
+                call_id=f"{step_id}_post_reflect_round_{round_num}",
+                log_dir=log_dir,
+            )
+
+            final_answer = extract_answer(gen_response)
+
+            if final_answer is not None and data_processor.answer_is_correct(final_answer, target):
+                print(f"  ✅ Corrected after reflection round {round_num + 1}!")
+                corrected = True
+                break
+
+        if corrected:
+            # Curator: called only on successful correction, same as existing behaviour
+            print(f"  --- Running Curator ---")
+            playbook_before_curator = self.playbook  # snapshot for possible rollback
+            stats = get_playbook_stats(self.playbook)
+            self.playbook, self.next_global_id, _operations, _ = self.curator.curate(
+                current_playbook=self.playbook,
+                recent_reflection=reflection_content,
+                question_context=context,
+                current_step=step,
+                total_samples=total_samples,
+                token_budget=token_budget,
+                playbook_stats=stats,
+                use_ground_truth=not no_ground_truth,
+                use_json_mode=use_json_mode,
+                call_id=step_id,
+                log_dir=log_dir,
+                next_global_id=self.next_global_id,
+            )
+
+            # ------------------------------------------------------------------
+            # Val-gated curator: evaluate on dev set and roll back if F1 drops
+            # ------------------------------------------------------------------
+            if val_gated_curator and val_samples:
+                val_results, _ = evaluate_test_set(
+                    data_processor,
+                    self.generators,
+                    self.playbook,
+                    val_samples,
+                    self.max_tokens,
+                    log_dir_valid,
+                    max_workers=test_workers,
+                    use_json_mode=use_json_mode,
+                    eval_label="VAL GATE",
+                    max_parse_retries=max_parse_retries,
+                )
+                new_f1 = val_results.get("macro_f1", 0.0)
+                if new_f1 > current_best_val_f1:
+                    print(f"  ✅ Curator accepted "
+                          f"(F1: {current_best_val_f1:.3f} → {new_f1:.3f})")
+                    current_best_val_f1 = new_f1
+                else:
+                    print(f"  ⚠️  Curator rejected "
+                          f"(new F1 {new_f1:.3f} ≤ best {current_best_val_f1:.3f}), "
+                          f"rolling back playbook")
+                    self.playbook = playbook_before_curator
+
+        return corrected, current_best_val_f1
+
     def _offline_train(
         self,
         train_samples: List[Dict[str, Any]],
@@ -770,209 +946,231 @@ class ACE:
         save_path: str,
         usage_log_path: str,
         playbook_dir: str,
-        log_dirs: Dict[str, str]
+        log_dirs: Dict[str, str],
+        initial_val_f1: float = 0.0
     ) -> Dict[str, Any]:
         """
-        Run offline training
-        
+        Run offline training with parallel initial sampling.
+
+        Each epoch has four phases:
+          1. Parallel initial sampling across all train samples.
+          2. Serial reflection + curation on samples that were wrong.
+          3. BulletpointAnalyzer merge (once per epoch, if enabled).
+          4. Validation eval + best-playbook tracking.
+
         Args:
-            train_samples: List of training samples
-            val_samples: List of validation samples
-            data_processor: Data processor instance for the task
-            config: Configuration dictionary
-            save_path: Path to save results
-            usage_log_path: Path for bullet usage logging
-            playbook_dir: Directory for intermediate playbooks
-            log_dirs: Dictionary with phase-specific log directories ('train', 'valid', 'test')
-            
+            train_samples: List of training samples.
+            val_samples: List of validation samples.
+            data_processor: Data processor instance for the task.
+            config: Configuration dictionary.
+            save_path: Path to save results.
+            usage_log_path: Path for bullet usage logging.
+            playbook_dir: Directory for intermediate playbooks.
+            log_dirs: Dictionary with phase-specific log directories.
+            initial_val_f1: Initial validation F1 before training starts.
+
         Returns:
-            Dictionary with training results
+            Dictionary with best_validation_accuracy and best_validation_f1.
         """
-        # Extract configuration using helper
-        config_params = self._extract_config_params(config)
-        task_name = config_params['task_name']
-        num_epochs = config_params['num_epochs']
-        eval_steps = config_params['eval_steps']
-        save_steps = config_params['save_steps']
-        test_workers = config_params['test_workers']
-        use_json_mode = config_params['use_json_mode']
-        curator_frequency = config_params['curator_frequency']
-        
-        # Initialize tracking
-        results = []
-        pre_train_post_train_results = []
+        config_params      = self._extract_config_params(config)
+        num_epochs         = config_params['num_epochs']
+        test_workers       = config_params['test_workers']
+        use_json_mode      = config_params['use_json_mode']
+        max_parse_retries  = config_params.get('max_parse_retries', 4)
+        val_gated_curator  = config_params.get('val_gated_curator', False)
+
+        results  = []
         error_logs = []
         best_accuracy = 0.0
-        best_f1 = 0.0
+        best_f1       = 0.0
         self.best_playbook = self.playbook
+        # Tracks the best val-F1 seen *before* Phase 2 of each epoch so that
+        # the curator gate has a proper baseline. Starts at initial_val_f1
+        # (if run_initial_val was True, else 0.0); updated at the end of each
+        # epoch's Phase 4.
+        curator_gate_best_f1 = initial_val_f1
 
         print(f"Total epochs: {num_epochs}")
         print(f"Train samples per epoch: {len(train_samples)}")
         print(f"Val samples: {len(val_samples)}")
-        print(f"Curator frequency: every {curator_frequency} steps")
-        print(f"Evaluation frequency: every {eval_steps} steps\n")
-        
-        # Training loop
+
         for epoch in range(1, num_epochs + 1):
             print(f"\n{'='*60}")
             print(f"EPOCH {epoch}/{num_epochs}")
             print(f"{'='*60}")
-            
-            epoch_answers_pre_train = []
-            epoch_targets_pre_train = []
-            epoch_answers_post_train = []
-            epoch_targets_post_train = []
-            
-            for step, task_dict in enumerate(train_samples):
-                step += 1
-                print(f"\n--- Step {step}/{len(train_samples)} ---")
-                
-                target = task_dict.get("target", "")
-                
-                # Use helper method for training single sample
-                pre_train_answer, post_train_answer, tracking_dict = self._train_single_sample(
-                    task_dict=task_dict,
-                    data_processor=data_processor,
-                    step_id=f"train_e_{epoch}_s_{step}",
-                    epoch=epoch,
-                    step=step,
-                    usage_log_path=usage_log_path,
-                    log_dir=log_dirs["train"],
-                    config_params=config_params,
-                    total_samples=len(train_samples)
+
+            # ------------------------------------------------------------------
+            # PHASE 1: Parallel initial sampling
+            # ------------------------------------------------------------------
+            sample_results = parallel_sample_train_batch(
+                data_processor=data_processor,
+                generators=self.generators,
+                playbook=self.playbook,
+                train_samples=train_samples,
+                max_tokens=self.max_tokens,
+                log_dir=log_dirs["train"],
+                max_workers=test_workers,
+                use_json_mode=use_json_mode,
+                max_parse_retries=max_parse_retries,
+                epoch=epoch,
+            )
+
+            correct_results      = [r for r in sample_results if not r['parse_failed'] and     r['is_correct']]
+            error_results        = [r for r in sample_results if not r['parse_failed'] and not r['is_correct']]
+            parse_failed_results = [r for r in sample_results if     r['parse_failed']]
+
+            print(f"\n[Phase 1 summary] Correct: {len(correct_results)} | "
+                  f"Wrong: {len(error_results)} | "
+                  f"Parse-failed (skipped): {len(parse_failed_results)}")
+
+            # ------------------------------------------------------------------
+            # PHASE 2: Serial reflection + curation on error samples
+            # ------------------------------------------------------------------
+            num_corrected = 0
+            if error_results:
+                print(f"\n{'='*40}")
+                print(f"[Phase 2] Reflecting on {len(error_results)} error samples")
+                if val_gated_curator:
+                    print(f"[Phase 2] Val-gated curator ENABLED "
+                          f"(baseline F1: {curator_gate_best_f1:.3f})")
+                print(f"{'='*40}")
+
+                for idx, sample_result in enumerate(error_results):
+                    orig_step = sample_result['index'] + 1   # 1-indexed
+                    step_id   = f"train_e{epoch}_s{orig_step}"
+                    print(f"\n  --- Error sample {idx + 1}/{len(error_results)} "
+                          f"(train index {orig_step}) ---")
+                    print(f"  Answer: {sample_result['final_answer']}  |  Target: {sample_result['target']}")
+
+                    corrected, curator_gate_best_f1 = self._reflect_and_curate_sample(
+                        sample_result=sample_result,
+                        data_processor=data_processor,
+                        step_id=step_id,
+                        step=orig_step,
+                        epoch=epoch,
+                        usage_log_path=usage_log_path,
+                        log_dir=log_dirs["train"],
+                        config_params=config_params,
+                        total_samples=len(train_samples),
+                        val_samples=val_samples if val_gated_curator else None,
+                        log_dir_valid=log_dirs["valid"],
+                        current_best_val_f1=curator_gate_best_f1,
+                    )
+                    if corrected:
+                        num_corrected += 1
+
+                print(f"\n[Phase 2 summary] Corrected {num_corrected}/{len(error_results)} "
+                      f"error samples via reflection")
+
+            # ------------------------------------------------------------------
+            # PHASE 3: BulletpointAnalyzer merge (once per epoch)
+            # ------------------------------------------------------------------
+            if self.use_bulletpoint_analyzer and self.bulletpoint_analyzer:
+                print(f"\n[Phase 3] BulletpointAnalyzer merge "
+                      f"(threshold={self.bulletpoint_analyzer_threshold})...")
+                self.playbook = self.bulletpoint_analyzer.analyze(
+                    playbook=self.playbook,
+                    threshold=self.bulletpoint_analyzer_threshold,
+                    merge=True,
                 )
-                
-                # Skip samples where parsing failed after all retries
-                if tracking_dict.get("parse_failed", False):
-                    print(f"  [train] Step {step}: skipped (parse failed) — not counted in accuracy stats")
-                    pre_train_post_train_results.append({
-                        "epoch": epoch, "step": step, "target": target, **tracking_dict
-                    })
-                    continue
-                
-                # Collect answers for accuracy calculation
-                epoch_answers_pre_train.append(pre_train_answer)
-                epoch_targets_pre_train.append(target)
-                epoch_answers_post_train.append(post_train_answer)
-                epoch_targets_post_train.append(target)
-                
-                # Track pre-train and post-train results
-                pre_train_post_train_result = {
-                    "epoch": epoch,
-                    "step": step,
-                    "target": target,
-                    **tracking_dict
-                }
-                pre_train_post_train_results.append(pre_train_post_train_result)
 
-                
-                # Save intermediate playbook
-                if step % save_steps == 0:
-                    intermediate_path = os.path.join(
-                        playbook_dir, f"epoch_{epoch}_step_{step}_playbook.txt"
-                    )
-                    with open(intermediate_path, "w") as f:
-                        f.write(self.playbook)
-                
-                # Periodic evaluation
-                if step % eval_steps == 0:
-                    print(f"\n{'='*40}")
-                    print(f"EVALUATION AT EPOCH {epoch}, STEP {step}")
-                    print(f"{'='*40}")
-                    
-                    # Compute training accuracies
-                    pre_train_accuracy = data_processor.evaluate_accuracy(
-                        epoch_answers_pre_train, epoch_targets_pre_train
-                    )
-                    post_train_accuracy = data_processor.evaluate_accuracy(
-                        epoch_answers_post_train, epoch_targets_post_train
-                    )
-                    
-                    # Validation evaluation
-                    val_results = {}
-                    val_f1 = 0.0
-                    if val_samples:
-                        val_results, val_error_log = evaluate_test_set(
-                            data_processor, self.generators, self.playbook,
-                            val_samples, self.max_tokens, log_dirs["valid"],
-                            max_workers=test_workers, use_json_mode=use_json_mode,
-                            eval_label="VALIDATION SET"
-                        )
-                    
-                    result = {
-                        "epoch": epoch,
-                        "step": step,
-                        "train_result": {
-                            "pre_train_accuracy": pre_train_accuracy,
-                            "post_train_accuracy": post_train_accuracy
-                        },
-                        "val_result": val_results,
-                        "playbook_num_tokens": count_tokens(self.playbook),
-                        "playbook_length": len(self.playbook),
-                        "playbook_stats": get_playbook_stats(self.playbook)
-                    }
-                    results.append(result)
-                    error_logs.append({
-                        "epoch": epoch,
-                        "step": step,
-                        "val_results": val_results,
-                        "error_log": val_error_log
-                    })
-
-                    # Track best playbook (by macro F1)
-                    if val_results:
-                        acc = val_results["accuracy"]
-                        if acc > best_accuracy:
-                            best_accuracy = acc
-                        val_f1 = val_results.get("macro_f1", 0.0)
-                        if val_f1 > best_f1:
-                            best_f1 = val_f1
-                            self.best_playbook = self.playbook
-                            print(f"🎉 New best macro F1: {best_f1:.3f} (accuracy: {acc:.3f})")
-                    
-                    # Save results
-                    results_path = os.path.join(save_path, "train_results.json")
-                    with open(results_path, "w") as f:
-                        json.dump({
-                            "best_accuracy": best_accuracy,
-                            "best_f1": best_f1,
-                            "results": results,
-                        }, f, indent=2)
-                    
-                    error_logs_path = os.path.join(save_path, "val_results.json")
-                    with open(error_logs_path, "w") as f:
-                        json.dump(error_logs, f, indent=2)
-            
-            # End of epoch - save final playbook
+            # Save epoch playbook
             epoch_playbook_path = os.path.join(
                 playbook_dir, f"epoch_{epoch}_final_playbook.txt"
             )
             with open(epoch_playbook_path, "w") as f:
                 f.write(self.playbook)
 
-        # Save training results
-        results_path = os.path.join(save_path, "train_results.json")
-        with open(results_path, "w") as f:
-            json.dump({
-                "best_accuracy": best_accuracy,
-                "best_f1": best_f1,
-                "results": results,
-            }, f, indent=2)
-        
-        pre_train_post_train_results_path = os.path.join(save_path, "pre_train_post_train_results.json")
-        with open(pre_train_post_train_results_path, "w") as f:
-            json.dump(pre_train_post_train_results, f, indent=2)
-        
-        # Save final playbook
-        final_playbook_path = os.path.join(save_path, f"final_playbook.txt")
+            # ------------------------------------------------------------------
+            # PHASE 4: Validation eval + best-playbook tracking
+            # ------------------------------------------------------------------
+            print(f"\n{'='*40}")
+            print(f"VALIDATION EVAL — Epoch {epoch}/{num_epochs}")
+            print(f"{'='*40}")
+
+            # Pre-train accuracy from phase-1 answers (excludes parse failures)
+            phase1_answers = [r['final_answer'] for r in sample_results if not r['parse_failed']]
+            phase1_targets = [r['target']       for r in sample_results if not r['parse_failed']]
+            pre_train_accuracy = (
+                data_processor.evaluate_accuracy(phase1_answers, phase1_targets)
+                if phase1_answers else 0.0
+            )
+
+            val_results  = {}
+            val_f1       = 0.0
+            val_error_log = {}
+            if val_samples:
+                val_results, val_error_log = evaluate_test_set(
+                    data_processor,
+                    self.generators,
+                    self.playbook,
+                    val_samples,
+                    self.max_tokens,
+                    log_dirs["valid"],
+                    max_workers=test_workers,
+                    use_json_mode=use_json_mode,
+                    eval_label="VALIDATION SET",
+                    max_parse_retries=max_parse_retries,
+                )
+
+            # Track best playbook (by macro F1, same metric as before)
+            if val_results:
+                acc    = val_results.get("accuracy", 0.0)
+                val_f1 = val_results.get("macro_f1", 0.0)
+                if acc > best_accuracy:
+                    best_accuracy = acc
+                if val_f1 > best_f1:
+                    best_f1 = val_f1
+                    self.best_playbook = self.playbook
+                    print(f"🎉 New best macro F1: {best_f1:.3f} (accuracy: {acc:.3f})")
+                # Update the curator gate baseline for the next epoch's Phase 2.
+                # This ensures each epoch's curator gate is anchored to the F1
+                # achieved at the *start* of that epoch (end of previous epoch).
+                curator_gate_best_f1 = val_f1
+
+            result = {
+                "epoch": epoch,
+                "train_result": {
+                    "pre_train_accuracy": pre_train_accuracy,
+                    "num_correct":                  len(correct_results),
+                    "num_wrong":                    len(error_results),
+                    "num_parse_failed":             len(parse_failed_results),
+                    "num_corrected_by_reflection":  num_corrected,
+                },
+                "val_result": val_results,
+                "playbook_num_tokens": count_tokens(self.playbook),
+                "playbook_length":     len(self.playbook),
+                "playbook_stats":      get_playbook_stats(self.playbook),
+            }
+            results.append(result)
+            error_logs.append({
+                "epoch":      epoch,
+                "val_result": val_results,
+                "error_log":  val_error_log,
+            })
+
+            # Persist after every epoch
+            results_path = os.path.join(save_path, "train_results.json")
+            with open(results_path, "w") as f:
+                json.dump({"best_accuracy": best_accuracy,
+                           "best_f1": best_f1,
+                           "results": results}, f, indent=2)
+
+            error_logs_path = os.path.join(save_path, "val_results.json")
+            with open(error_logs_path, "w") as f:
+                json.dump(error_logs, f, indent=2)
+
+        # ------------------------------------------------------------------
+        # Post-training saves
+        # ------------------------------------------------------------------
+        final_playbook_path = os.path.join(save_path, "final_playbook.txt")
         with open(final_playbook_path, "w") as f:
             f.write(self.playbook)
-        
-        # Save best playbook
-        best_playbook_path = os.path.join(save_path, f"best_playbook.txt")
+
+        best_playbook_path = os.path.join(save_path, "best_playbook.txt")
         with open(best_playbook_path, "w") as f:
             f.write(self.best_playbook)
-        
+
         print(f"\n{'='*60}")
         print(f"OFFLINE TRAINING COMPLETE")
         print(f"{'='*60}")
@@ -982,7 +1180,9 @@ class ACE:
 
         return {"best_validation_accuracy": best_accuracy, "best_validation_f1": best_f1}
 
-    
+
+
+
     def test(
         self,
         test_samples: List[Dict[str, Any]],

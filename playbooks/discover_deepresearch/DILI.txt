@@ -1,0 +1,391 @@
+# DILI Prediction Exploration Playbook for RL-trained Small LLMs
+
+- Treat a DILI label as an **imperfect real-world association** (not a pure structural truth), and keep missing context (dose/exposure, duration, host factors) explicitly “unknown.”  
+- Use **multiple competing hypothesis families** (bioactivation, mitochondria, bile acid transport/cholestasis, immune/idiosyncratic, low-liability) and avoid collapsing onto a single cue.  
+- Treat common trends (lipophilicity, dose, metabolism) as **soft priors**, not rules, and actively search for counter-stories that could flip the decision.  
+- Separate **mechanistic plausibility** (what could happen) from **mechanistic certainty** (what did happen): do not assert reactive metabolites, BSEP inhibition, or immune causation without strong evidence.  
+- Prefer **integrated risk narratives** (“multiple moderate liabilities aligned”) over brittle “alert counting.”  
+- Calibrate language: allow “uncertain / borderline” outcomes and reflect dataset noise; exploration should be rewarded over overconfidence.  
+- Anchor learning with **diverse, named exemplars** that illustrate mechanisms *and* failure modes—each example is a teaching story, not a template.  
+
+## Section 1 — What this task is really asking
+
+A DILI prediction task (e.g., a TDC-style binary classifier from SMILES) is usually asking: **“Is this compound *associated* with meaningful drug-induced liver injury risk in humans, in real-world use?”**—not “Does the structure *intrinsically* kill hepatocytes?” and not “Will this specific patient develop hepatitis.”  
+
+The label compresses many missing variables: **dose, duration, formulation, route, adherence, hepatic exposure, comedications, alcohol, infections/inflammation, genetics (e.g., HLA), age, and underlying disease**. These variables can dominate clinical outcomes, but are typically absent in structure-only benchmarks. Your job is to reason under severe partial observability.  
+
+In some benchmark datasets, DILI labels are derived from **drug labeling and literature synthesis** (e.g., FDA DILIrank-style resources) or aggregated public toxicity knowledge bases; they are not perfect ground truth causal adjudications, and they can reflect reporting bias, exposure prevalence, and evolving regulatory language.  
+
+So the output “DILI+” should be read as: **non-trivial clinical liver injury liability exists somewhere in the real-world envelope** (certain subpopulations, doses, durations, interactions). “DILI-” should be read as: **no strong signal of clinically meaningful liver injury liability**, acknowledging that rare idiosyncratic events can still exist for many drugs.  
+
+## Section 2 — Why DILI outcomes are multifactorial
+
+Clinical DILI is not one mechanism. It is an **integrated outcome** that can emerge when (i) the liver is exposed, (ii) hepatocytes or bile duct cells experience stress/injury, and/or (iii) immune mechanisms convert a small initial insult into clinically apparent hepatitis or cholestasis.  
+
+A compact, exploration-friendly causal sketch is:
+
+**Exposure → hepatic handling → stress pathways → clinical phenotype (and detection).**
+
+- **Exposure / burden:** Oral drugs and drugs with substantial hepatic delivery can create higher “opportunity” for injury, but you often do *not* know the dose or systemic exposure from a SMILES string. Still, exposure burden is frequently discussed as a risk factor in clinical and translational reviews.  
+- **Metabolism / bioactivation:** Many DILI mechanisms involve **hepatic metabolism**, sometimes creating **reactive metabolites** that covalently modify proteins or generate oxidative stress. But reactive metabolite linkage is often hard to prove, and not all idiosyncratic DILI requires reactive metabolites.  
+- **Mitochondrial dysfunction / oxidative stress:** Mitochondria are frequent targets in hepatotoxicity; disruption of β-oxidation, oxidative phosphorylation, or mitochondrial redox balance can yield steatosis, necrosis, or liver failure phenotypes.  
+- **Bile acid transport / cholestasis:** Inhibition or disruption of bile acid transporters (often discussed around BSEP/ABCB11 and related transporters) can cause bile acid accumulation and cholestatic or mixed injury patterns. However, transporter inhibition alone is not a universal predictor.  
+- **Immune-mediated (idiosyncratic) pathways:** Some DILI appears to involve adaptive immune mechanisms (e.g., HLA associations, drug-specific T cells), often conceptualized via hapten/pro-hapten or related frameworks—but mechanism certainty usually cannot be inferred from structure alone.  
+
+A central distinction is **intrinsic (direct, predictable, often dose-dependent) DILI** versus **idiosyncratic (unpredictable, rare, host-dependent) DILI**. Intrinsic DILI is classically exemplified by acetaminophen overdose; idiosyncratic DILI is the main focus of many clinical guidelines because it is diagnostically and mechanistically challenging.  
+
+Also important: clinically observed DILI depends on **detection thresholds** (ALT/ALP monitoring, clinical symptoms) and on competing diagnoses (viral hepatitis, ischemic injury, autoimmune disease), which is why causality assessment tools (e.g., RUCAM) exist in clinical practice. Structure-only tasks rarely encode these nuances.  
+
+## Section 3 — Main hypothesis families to consider
+
+This section defines **hypothesis families**. Your goal is not to pick one instantly, but to generate 2–3 plausible families, then test them against each other.
+
+### Low-apparent-liability / weak-signal
+
+**When plausible:** The molecule is highly polar/ionized-looking, has limited lipophilic surface, and offers few obvious “stress pathway hooks.” Often these are compounds with limited oxidative metabolism or that are eliminated largely unchanged (you usually cannot know this from structure alone, but very polar scaffolds often suggest it).  
+
+**What supports it:** Lack of multiple converging risk narratives; no strong reason to expect high hepatic accumulation, strong transporter interference, or bioactivation; a coherent “benign handling” story (e.g., renal elimination, minimal metabolism) if such a story is plausible.  
+
+**What weakens it:** Presence of *multiple* moderate red flags (e.g., plausible bioactivation *and* high lipophilicity *and* cationic amphiphilicity) even if none is definitive; structural similarity to known high-liability drug classes (use cautiously; similarity is not causality).  
+
+**Common weak-model mistake:** Treating “no obvious alert” as “safe,” ignoring that idiosyncratic DILI mechanisms can be subtle and host-driven.  
+
+### Exposure-and-bioactivation-driven risk
+
+**When plausible:** The structure suggests a **lipophilic, metabolically “busy”** compound (multiple aromatic rings, heteroatoms positioned for oxidation, bulky hydrophobic motifs). This family is about **opportunity**: higher hepatic processing can increase the chance of reactive intermediates or stress responses.  
+
+**What supports it:** Converging soft priors such as (i) lipophilicity and high dose being discussed as risk factors in some analyses, and (ii) extensive metabolism being associated with increased DILI risk in some datasets—**with substantial variability across annotations**.  
+
+**What weakens it:** A plausible counter-story of **low clinical exposure** (e.g., highly potent drug at very low daily dose—often unknown from SMILES), or rapid detox/clearance pathways that do not generate damaging intermediates (also hard to know).  
+
+**Common weak-model mistake:** Using “lipophilic + metabolized” as a deterministic shortcut (“Rule-of-2 thinking”), rather than a prompt to explore multiple downstream mechanisms and counterexamples.  
+
+### Reactive-metabolite / electrophile-suspected risk
+
+**When plausible:** The scaffold could plausibly form electrophilic intermediates during oxidation (e.g., quinone/quinone-imine-like, epoxides), or has groups historically associated with reactive metabolite formation and covalent binding (treat as *possibilities*, not “alerts = truth”).  
+
+**What supports it:** Mechanistic literature emphasizes that many idiosyncratic reactions are *consistent* with reactive metabolites, but also that **direct proof is difficult** and covalent binding alone is an imperfect predictor.  
+
+**What weakens it:** Strong reasons to believe bioactivation is unlikely (e.g., minimal oxidative metabolism) or that reactive intermediates are quickly quenched without downstream injury; also, the existence of known IDILI drugs without obvious reactive metabolite involvement cautions against overcommitment.  
+
+**Common weak-model mistake:** Asserting “forms a reactive metabolite” as a fact from structure alone. Replace with: “bioactivation is plausible; keep it as a hypothesis.”  
+
+### Mitochondrial / oxidative-stress-suspected risk
+
+**When plausible:** The molecule resembles classes known to impair mitochondrial function (e.g., fatty-acid-like motifs, strong amphiphilic cations) or can induce oxidative stress through metabolism and redox cycling. Mitochondrial dysfunction is discussed as a major pathway in DILI.  
+
+**What supports it:** Reviews and clinical resources describe mitochondrial impairment leading to specific lesion patterns (e.g., microvesicular steatosis) and severe outcomes; many drugs can affect mitochondria directly or via metabolites.  
+
+**What weakens it:** A lack of plausible mitochondrial interaction features is not decisive (many relations are not structure-obvious), and mitochondrial signals can be conditional on dose, comorbidities, or drug-drug interactions.  
+
+**Common weak-model mistake:** Overcalling mitochondrial toxicity whenever a molecule is lipophilic, or undercalling it because the structure looks “simple.”  
+
+### Cholestatic / transporter-related suspicion
+
+**When plausible:** Structural features could support canalicular transporter interference (e.g., bulky amphipathic molecules, certain cationic/anionic patterns), or the compound resembles known transporter inhibitors. Mechanistically, inhibition of bile acid export (often discussed via BSEP/ABCB11) can lead to bile acid accumulation and liver injury.  
+
+**What supports it:** Evidence that many cholestatic DILI drugs inhibit BSEP in vitro and that bile acid homeostasis disruption is central to drug-induced cholestasis.  
+
+**What weakens it:** BSEP inhibition alone does not reliably predict in vivo DILI; compensatory transport, bile acid composition, exposure, and parallel injury mechanisms matter.  
+
+**Common weak-model mistake:** Treating “cholestasis/BSEP” as a universal trigger rather than a conditional mechanism that often needs context (exposure, additional stress, susceptibility).  
+
+### Immune/idiosyncratic-suspected risk
+
+**When plausible:** The molecule could plausibly generate neoantigens (often via reactive metabolites) *and* has a “profile” consistent with idiosyncratic reactions (rare, delayed, sometimes HLA-linked). However, most immune features are not directly readable from structure.  
+
+**What supports it:** Strong clinical patterns such as HLA associations for certain drugs demonstrate that adaptive immunity can be causal in DILI for at least some molecules.  
+
+**What weakens it:** The lack of an obvious bioactivation motif does not rule immune mechanisms out, but it reduces one common *plausibility* story; also, immune DILI often depends heavily on host context not provided in datasets.  
+
+**Common weak-model mistake:** Either (i) never considering immune mechanisms (structure-only tunnel vision), or (ii) declaring immune causation confidently with no supporting evidence.  
+
+### Mixed or borderline evidence
+
+**When plausible:** You can tell at least one troubling story and at least one credible mitigating story, and neither dominates. This is common because SMILES-only inference is intrinsically underdetermined.  
+
+**What supports it:** Conflicting weak signals; multiple moderate liabilities without a clear “primary mechanism”; or drug classes known to include both safe and unsafe members.  
+
+**What weakens it:** Clear convergence: e.g., a classic intrinsic toxicity story with strong mechanistic grounding *and* no plausible mitigation other than “maybe low exposure.”  
+
+**Common weak-model mistake:** Forcing certainty—turning borderline into a confident “DILI+” or “DILI-” without acknowledging missing variables and label noise.  
+
+### Atypical / special-case / uncertain
+
+**When plausible:** Prodrugs, highly reactive “designed electrophiles,” extremely large/complex molecules, or compounds whose risk depends on formulation, local hepatic activation, or patient selection. Many benchmark labels flatten these complexities.  
+
+**Common weak-model mistake:** Overgeneralizing small-molecule priors to everything, or ignoring that “clinical DILI label” can reflect clinical use patterns rather than purely intrinsic chemistry.  
+
+## Section 4 — Competing explanations and tension pairs
+
+Use these “tension pairs” to prevent premature collapse. For each pair, keep both sides active until you decide.
+
+### Lipophilicity / exposure burden vs non-specific overcalling
+
+Lipophilicity and high daily dose have been reported as risk correlates in some analyses, but these are **population-level associations** with exceptions and annotation dependence. From SMILES, dose is usually unknown, and lipophilicity is only weakly inferred.  
+
+**Exploration habit:** If you feel tempted to say “lipophilic → DILI+,” force yourself to generate at least one counter-story: low dose, benign metabolism, limited hepatic exposure, or adaptive responses rather than injury.  
+
+### Metabolic activation suspicion vs lack of proof from structure alone
+
+Bioactivation is central in many mechanistic narratives, but the literature repeatedly notes that it is difficult to prove reactive metabolite causality, and some IDILI drugs may not have obvious reactive metabolites.  
+
+**Exploration habit:** Replace “will form a reactive metabolite” with “could plausibly form a reactive intermediate under hepatic oxidation.” Then ask: what would make that intermediate clinically relevant (exposure, insufficient detox, mitochondrial vulnerability, immune amplification)?  
+
+### Structural alert presence vs real-world irrelevance or muted exposure
+
+Many “alerts” are **not sufficient** for clinical DILI. Covalent binding can be seen even for safe drugs, and downstream biology (danger signals, immune activation, repair capacity) can determine whether injury becomes clinically apparent.  
+
+**Exploration habit:** If a scary motif appears, ask: is there a plausible detox/repair story, or a plausible “too little exposure” story? If you can’t justify either, then alert-like concern may matter—but keep uncertainty explicit.  
+
+### Cholestatic intuition vs weak universal predictiveness
+
+Transporter inhibition (e.g., BSEP) is mechanistically plausible and supported for many cholestatic DILI drugs, but it is not a universal predictor; context and co-mechanisms matter.  
+
+**Exploration habit:** Keep cholestasis as a branch, but check whether you can tell a *second* injury story (mitochondrial stress, oxidative stress, immune amplification). Pure single-mechanism cholestasis claims are often fragile.  
+
+### “Highly metabolized” vs “actually hepatotoxic”
+
+Many hepatotoxic drugs are metabolized, but many heavily metabolized drugs are not clinically hepatotoxic. “Metabolized” increases opportunity; it does not guarantee injury.  
+
+**Exploration habit:** When you think “metabolized → DILI+,” force a rival hypothesis: benign clearance, reactive metabolite quenched, low hepatic exposure, or endocrine/other toxicity dominating instead.  
+
+### Plausible immune mechanism vs overclaiming unseen biology
+
+Some DILI has strong immune-genetic signatures (e.g., HLA-linked), but those signatures are rarely inferable from structure alone.  
+
+**Exploration habit:** You can label a hypothesis family as “immune/idiosyncratic plausible,” but avoid mechanistic certainty. Prefer “could involve adaptive immune mechanisms in susceptible hosts.”  
+
+### Multiple moderate liabilities aligning vs one dramatic-looking feature dominating
+
+Clinical DILI often reflects **convergence**: exposure burden + metabolism + stress pathways + host susceptibility. Overweighting one dramatic motif increases false positives and misses subtle multi-factor cases.  
+
+**Exploration habit:** If one feature dominates your attention, require a “second supporting pillar” before you commit strongly.  
+
+### Molecule-intrinsic suspicion vs missing host/context variables
+
+DILI labels often reflect real-world use patterns, comedications, and susceptibility. Benchmark labels can therefore look like “molecule truth” but contain embedded context.  
+
+**Exploration habit:** Always add a sentence of uncertainty about missing context when evidence is not strongly convergent.  
+
+## Section 5 — Archetypal molecule situations
+
+Below are compact archetypes. Each includes a dominant hypothesis, a competing hypothesis to check, and one named representative molecule with **canonical SMILES** (verified against curated chemistry resources). The representative is a teaching story—not a template.
+
+### Prototypical likely DILI-
+
+**Why educational:** Teaches restraint: some drugs look “drug-like” yet have very low observed hepatotoxicity, reminding you that DILI is not inevitable.  
+
+**Dominant hypothesis:** Low-apparent-liability / weak-signal.
+
+**Competing hypothesis to check:** Rare idiosyncratic injury still possible; do not claim “impossible.”  
+
+**Key lesson:** Absent strong converging signals, prefer DILI- with appropriate uncertainty language.
+
+**Representative molecule:** Metformin  
+Canonical SMILES: `CN(C(=N)N=C(N)N)C`.  
+Pedagogical use: Metformin is widely used and is described as **not linked to routine liver enzyme elevations and an exceedingly rare cause of clinically apparent liver injury**, making it a good anchor for “likely DILI-” reasoning.  
+What it does *not* prove: A “likely DILI-” exemplar does not mean all polar/low-logP molecules are DILI-free, nor does it eliminate rare idiosyncratic reports.  
+
+### Prototypical intrinsic/direct hepatotoxicity-like situation
+
+**Why educational:** Shows that some DILI is **dose-dependent and predictable**, and that “DILI+” can be driven by overdose biology rather than subtle idiosyncrasy.  
+
+**Dominant hypothesis:** Intrinsic toxicity through reactive metabolite overload and downstream mitochondrial/oxidative stress.
+
+**Competing hypothesis to check:** At therapeutic doses, some intrinsic-toxicity exemplars are safe; the label can compress **dose** effects.  
+
+**Key lesson:** If a mechanism is clearly *dose-thresholded*, keep “exposure unknown” visible in the reasoning.
+
+**Representative molecule:** Paracetamol (acetaminophen)  
+Canonical SMILES: `CC(=O)Nc1ccc(cc1)O`.  
+Pedagogical use: Paracetamol overdose toxicity is a canonical example where excessive reactive metabolite formation depletes glutathione and drives mitochondrial oxidative stress and injury.  
+What it does *not* prove: The presence of an anilide/phenol scaffold does not automatically imply intrinsic overdose-like DILI for other molecules; context (dose, metabolism rates) dominates.  
+
+### Metabolism-heavy lipophilic risk-looking molecule
+
+**Why educational:** Trains you to construct an exposure/metabolism narrative **without** making it deterministic, and to anticipate multiple interacting pathways.  
+
+**Dominant hypothesis:** Exposure-and-bioactivation-driven risk (with possible convergence with mitochondrial stress and/or transporter effects).
+
+**Competing hypothesis to check:** “Lipophilic + metabolized” could still be clinically manageable if exposure is controlled or detox dominates; you should not treat this archetype as universal.  
+
+**Key lesson:** Use lipophilicity/metabolism as a **prompt to explore** downstream mechanisms (reactive intermediates, mitochondria, transport), not as a shortcut.
+
+**Representative molecule:** Troglitazone  
+Canonical SMILES: `O=C1NC(=O)C(S1)Cc1ccc(cc1)OCC1(C)CCc2c(O1)c(C)c(c(c2C)O)C`.  
+Pedagogical use: Troglitazone is a well-known withdrawn example of serious clinical hepatotoxicity, useful for illustrating that multiple liabilities (exposure, metabolism-linked stress, possible immune components) can align.  
+What it does *not* prove: Troglitazone’s history does not mean all thiazolidinediones or all lipophilic antidiabetics are high DILI risk; related drugs have much rarer injury reports.  
+
+### Reactive-metabolite-suspected case
+
+**Why educational:** Demonstrates how to talk about reactive metabolite risk **as a hypothesis**, and how to connect it to clinical idiosyncrasy without overclaiming.  
+
+**Dominant hypothesis:** Reactive-metabolite / covalent-stress-suspected risk (possibly with immune amplification).
+
+**Competing hypothesis to check:** Many reactive-metabolite-capable molecules do not cause clinically meaningful DILI; detox and exposure matter.  
+
+**Key lesson:** “Reactive metabolite plausible” should increase exploration breadth, not confidence.
+
+**Representative molecule:** Diclofenac  
+Canonical SMILES: `OC(=O)Cc1ccccc1Nc1c(Cl)cccc1Cl`.  
+Pedagogical use: Diclofenac is a commonly cited NSAID in clinical DILI resources, often discussed as idiosyncratic with suspected contributions from metabolism/toxic intermediates and immunologic features in some cases.  
+What it does *not* prove: A “bioactivation-suspected” story cannot be mechanically asserted for every aromatic carboxylic acid or NSAID-like scaffold; idiosyncrasy and exposure dominate real outcomes.  
+
+### Cholestatic/transporter-suspected case
+
+**Why educational:** Forces explicit reasoning about bile acid homeostasis and the limitations of transporter-only shortcuts.  
+
+**Dominant hypothesis:** Cholestatic / transporter-related suspicion (e.g., canalicular efflux disruption).
+
+**Competing hypothesis to check:** Hepatocellular injury can still occur even when transporter ideas are present, and BSEP inhibition alone is not reliably predictive.  
+
+**Key lesson:** Cholestasis is a *branch*, not a verdict.
+
+**Representative molecule:** Bosentan  
+Canonical SMILES: `OCCOc1nc(nc(c1Oc1ccccc1OC)NS(=O)(=O)c1ccc(cc1)C(C)(C)C)c1ncccn1`.  
+Pedagogical use: Bosentan is described in clinical resources as associated with serum enzyme elevations and rare clinically apparent liver injury, and mechanistic discussions include transporter inhibition (e.g., bile acid efflux disruption) as a plausible contributor.  
+What it does *not* prove: A transporter narrative does not mean every bulky amphipathic sulfonamide-like drug causes cholestatic DILI; in vivo outcomes depend on exposure, compensatory transport, and co-mechanisms.  
+
+### Immune/idiosyncratic-plausible but mechanism-uncertain case
+
+**Why educational:** Teaches that some DILI is fundamentally **host-conditional**, and structure-only reasoning must stay uncertainty-aware.  
+
+**Dominant hypothesis:** Immune/idiosyncratic-suspected risk (adaptive immunity in susceptible hosts).
+
+**Competing hypothesis to check:** Even with strong genetic associations, absolute incidence can be low; avoid overcalling from “immune story” alone.  
+
+**Key lesson:** If the best explanation is “host susceptibility,” then your confidence should be moderated.
+
+**Representative molecule:** Flucloxacillin  
+Canonical SMILES: `O=C1[C@@H](NC(=O)c2c(C)onc2c2c(F)cccc2Cl)[C@@H]2N1[C@@H](C(=O)O)C(S2)(C)C`.  
+Pedagogical use: Flucloxacillin-induced liver injury has a well-known HLA association and drug-specific T-cell evidence in the literature, making it a clear teaching case for immune-genetic susceptibility.  
+What it does *not* prove: The presence of a β-lactam (or any “allergen-like” scaffold) does not automatically imply HLA-linked DILI; immune DILI is drug- and host-specific.  
+
+### Scary-looking but probably overcalled case
+
+**Why educational:** Corrects a common failure mode: equating “any ALT signal” or “big hydrophobic scaffold” with clinically meaningful DILI. Many drugs cause mild enzyme elevations that are transient or clinically unimportant.  
+
+**Dominant hypothesis:** Low-apparent-liability or low-to-moderate concern (often “adaptive” enzyme elevations rather than severe DILI).
+
+**Competing hypothesis to check:** Rare clinically apparent cases can occur; avoid claiming zero risk.  
+
+**Key lesson:** Do not confuse “biochemical signal” with “severe hepatotoxicity.”
+
+**Representative molecule:** Pravastatin  
+Canonical SMILES: `CCC(C(=O)OC1CC(O)C=C2C1C(CCC(CC(CC(=O)O)O)O)C(C=C2)C)C)C`.  
+Pedagogical use: Clinical resources describe pravastatin as associated with mild, usually transient aminotransferase elevations, with clinically apparent injury being rare—useful for learning restraint and nuance.  
+What it does *not* prove: Statins are not a universal “safe class” (rare injury exists), and you cannot generalize pravastatin’s profile to unrelated lipophilic drugs.  
+
+### Bland-looking but still not obviously safe case
+
+**Why educational:** Highlights that deceptively simple scaffolds can drive severe injury via mitochondria and metabolism—so “no alert” is not a safety guarantee.  
+
+**Dominant hypothesis:** Mitochondrial/oxidative-stress-suspected risk (e.g., impaired β-oxidation; microvesicular steatosis pattern).
+
+**Competing hypothesis to check:** Risk can be subpopulation-dependent (age, comedications, genetic mitochondrial disorders), so structure-only confidence should be limited.  
+
+**Key lesson:** “Simple” does not mean “safe”; ask which deep pathways could be hit.
+
+**Representative molecule:** Valproic acid  
+Canonical SMILES: `CCCC(C(=O)O)CCC`.  
+Pedagogical use: Clinical summaries emphasize that valproate hepatotoxicity has features of mitochondrial injury and microvesicular steatosis, making it a key exemplar for mitochondria-linked DILI narratives.  
+What it does *not* prove: Not all branched carboxylic acids cause mitochondrial DILI; context (age, comedications, underlying mitochondrial vulnerability) can be decisive.  
+
+### Mixed-evidence borderline case
+
+**Why educational:** Teaches calibrated uncertainty: some drugs have real DILI risk signals but strongly depend on host factors and exposure patterns, which are usually missing in SMILES-only tasks.  
+
+**Dominant hypothesis:** Mixed/borderline evidence (bioactivation plausible + host susceptibility).
+
+**Competing hypothesis to check:** Many patients tolerate such drugs; do not overfit to “famous DILI drug” status without integrating dose/exposure uncertainty.  
+
+**Key lesson:** When the best reasoning relies on missing variables, lower confidence and keep both DILI+ and DILI- stories explicit.
+
+**Representative molecule:** Isoniazid  
+Canonical SMILES: `C1=C(C=CN=C1)C(=O)NN`.  
+Pedagogical use: Risk-factor discussions note that isoniazid hepatotoxicity is influenced by host factors (e.g., age) and is often treated as idiosyncratic with metabolism-linked hypotheses—ideal for practicing “multiple interacting causes.”  
+What it does *not* prove: A pyridine hydrazide scaffold is not a generic DILI template; structure alone rarely determines who gets injury or how severe it becomes.  
+
+## Section 6 — Anti-rules and common failure modes
+
+These are memorable “anti-rules”—shortcuts that often fail in DILI prediction.
+
+- **Anti-rule:** “One structural alert → DILI+.” Alerts are prompts for hypotheses, not verdicts; many safe drugs can form reactive species or show covalent binding.  
+- **Anti-rule:** “Lipophilic → DILI+.” Lipophilicity is, at best, a soft population-level correlate that depends on dose, annotation, and context.  
+- **Anti-rule:** “Highly metabolized → DILI+.” Metabolism increases opportunity but does not guarantee clinically meaningful hepatotoxicity.  
+- **Anti-rule:** “Rule-of-2-style ideas are laws.” Dose + lipophilicity patterns can be informative, but exceptions are common and you usually do not know dose from SMILES.  
+- **Anti-rule:** “This definitely forms a reactive metabolite.” Reactive metabolite causality is hard to prove; keep it as “plausible,” not “certain.”  
+- **Anti-rule:** “This is a BSEP inhibitor → cholestatic DILI.” Transporter inhibition alone does not reliably predict DILI; compensatory biology and exposure matter.  
+- **Anti-rule:** “No obvious alert → safe.” Many mechanisms (mitochondria, immune, transport) can be non-obvious from structure alone.  
+- **Anti-rule:** “Clinical DILI label = pure molecule-intrinsic toxicity.” Labels often embed use patterns, comedications, detection practices, and causality uncertainty.  
+- **Anti-rule:** “Guess a single mechanism and state it confidently.” DILI is multifactorial; uncertainty-aware multi-hypothesis reasoning is usually more correct than mechanism certainty theater.  
+- **Anti-rule:** “Ignore host factors because you can’t see them.” You can’t observe them, but you *must* model them as latent drivers and reduce confidence when they are essential to your story.  
+
+## Section 7 — Exploration checklist
+
+Use this checklist before committing to DILI+ / DILI-.
+
+1) **State the strongest DILI-relevant signals** you can infer from structure (e.g., “lipophilic & metabolically complex,” “transport-interference plausible,” “mitochondria hypothesis plausible,” “no clear hooks”).  
+
+2) **Write your leading hypothesis family** in one sentence (not a mechanism claim):  
+“Leading hypothesis: ____ risk driven by ____ (conditional on exposure/host factors).”  
+
+3) **Write the strongest competing hypothesis** that would flip the label. Examples:  
+- “Despite scary motif, exposure may be low or detox dominates.”  
+- “Despite bland structure, mitochondria could be affected.”  
+- “Despite transporter suspicion, BSEP alone is weakly predictive.”  
+
+4) **Check single-cue overreaction:** Are you over-weighting one alert, one ring, one “looks lipophilic” impression? If yes, add a second pillar or reduce confidence.  
+
+5) **Name missing real-world variables** that would matter most here (dose, duration, inflammation, HLA, comeds). Mark them explicitly “unknown.”  
+
+6) **Explain why it might still be DILI-** (credible mitigation story).  
+
+7) **Explain why it might still be DILI+** (credible convergence story).  
+
+8) **State what makes you uncertain** (label noise, missing dose, mechanism ambiguity).  
+
+9) **Decide:** DILI+ or DILI-, and give a calibrated confidence phrase.
+
+## Section 8 — Final decision rubric
+
+This rubric converts exploration into an answer without rewarding brittle shortcuts.
+
+### Integrate evidence by convergence, not counting
+
+- **Lean DILI+** when you can tell a coherent story with **at least two converging pillars**, such as:  
+  (i) plausible high hepatic exposure burden, (ii) plausible metabolism/bioactivation stress, (iii) plausible mitochondrial vulnerability, (iv) plausible bile acid transport disruption, (v) plausible immune/idiosyncratic amplification in susceptible hosts.  
+
+- **Lean DILI-** when you have **no strong convergence**, and you can articulate at least one credible benign-handling or low-opportunity story (e.g., low hepatic processing, low accumulation), while acknowledging that rare idiosyncratic events cannot be excluded.  
+
+### Distinguish strength of concern (for your own calibration)
+
+You still output binary, but internally calibrate:
+
+- **Strong DILI concern (confident DILI+):** Multiple interacting liabilities with few mitigating stories; the molecule resembles archetypes where clinical guidance emphasizes real injury risk (not just mild enzymes).  
+- **Moderate concern (DILI+ with moderate/low confidence):** One main plausible hazard narrative plus a credible counter-narrative; missing dose/exposure is decisive.  
+- **Weak concern (likely DILI-):** Signals are absent or very weak; your best DILI+ story relies heavily on unknowns without structural support.  
+
+### Avoid overclaiming mechanisms
+
+When giving the final answer, prefer language like:
+
+- “**Suggestive of** metabolism-linked risk” (not “causes reactive metabolites”).  
+- “**Consistent with** possible cholestatic/transporter involvement” (not “BSEP inhibitor”).  
+- “**Could be compatible with** immune/idiosyncratic liability in susceptible hosts” (not “HLA-mediated”).  
+
+### Express uncertainty explicitly and use calibrated confidence
+
+A simple verbal calibration (choose one):
+
+- **High confidence**: evidence strongly convergent; limiting assumptions.  
+- **Medium confidence**: plausible but underdetermined; competing stories exist.  
+- **Low confidence**: label likely depends on missing variables; weak structural signal.
+
+Dataset-derived labels are noisy and context-embedded, so “medium/low confidence” is often the honest outcome, especially for idiosyncratic DILI.  
+
+### Make the final DILI+ / DILI- call
+
+- Output **DILI+** if your integrated reasoning finds *more plausible ways* for clinically meaningful injury than for benign handling, given the limited observables.  
+- Output **DILI-** if plausible injury stories are weak/singular and mitigation stories are credible, while acknowledging residual rare idiosyncratic risk.

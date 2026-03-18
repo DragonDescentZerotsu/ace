@@ -1,0 +1,55 @@
+## DILI PLAYBOOK
+
+## THIS GUIDE HELPS ASSESS A PROBABILITY P (0-100) THAT A MOLECULE CAN CAUSE HUMAN DILI.
+[dil-00001] :: DILI risk from SMILES is driven mainly by (i) structural alerts and (ii) physicochemical risk factors, especially lipophilicity and aromaticity. Dose/exposure often dominates real-world DILI risk, but it is unknown from SMILES, so this playbook estimates intrinsic risk only.
+[dil-00002] :: BASE P_RAW = 20
+
+## GENERAL SCORING RULES
+[dil-00003] :: Structural alerts must be scored only when the corresponding substructure flag is explicitly true (e.g., hydrazine = true, furan = true, aniline_primary = true, sulfonamide = true). Do NOT infer alert presence from indirect annotations such as functional-group trees, ChEMBL alerts, or free-text descriptions.
+[dil-00004] :: Compute a running score P_CURRENT by starting from P_RAW = 20, then adding structural-alert points and physicochemical-risk points, then applying reductions, then applying safety caps.
+[dil-00005] :: When a cap is specified, apply it as: P_CURRENT = min(P_CURRENT, CAP_VALUE). A cap only lowers an upper bound; it never increases a lower score.
+[dil-00006] :: After all additions, reductions, and caps are complete, compute P_FINAL using the uncertainty-dampening rule if applicable; otherwise set P_FINAL = round(P_CURRENT). Clamp the final result to [0, 100].
+
+## STRUCTURAL ALERT POINTS
+[dil-01001] :: Hydrazine / hydrazide: +30
+[dil-01002] :: Furan: +25
+[dil-01003] :: Aniline (primary aromatic amine only; requires aniline_primary = true): +15
+[dil-01004] :: Sulfonamide: +10
+[dil-01005] :: Other generic alerts (alkyl halide, thioether, thiol, sulfoxide, epoxide, Michael acceptor): +8 each, cumulative cap +25, but only if the molecule also shows at least one adverse physicochemical factor (logP >= 2, aromatic rings >= 2, MW >= 300, or ESOL logS <= -3) AND TPSA < 100. Otherwise, treat these generic alerts as 0.
+[dil-01006] :: If the molecule is a corticosteroid-like / sterol-like saturated polycyclic scaffold with <= 1 aromatic ring, treat generic alerts in [dil-01005] as neutral (0) unless there is a separate high-risk alert such as hydrazine, furan, aniline, or sulfonamide.
+[dil-01007] :: PAH-like liability (>= 3 fused aromatic rings): +10
+
+## PHYSICOCHEMICAL RISK
+[dil-02001] :: LogP: <2 +0; 2-3 +5; 3-4 +12; >=4 +18
+[dil-02002] :: Aromatic rings: 0-1 +0; 2 +6; 3 +12; >=4 +18
+[dil-02003] :: MW: <300 +0; 300-399 +4; 400-499 +8; >=500 +12
+[dil-02004] :: ESOL logS: >-3 +0; -4 to -3 +5; <=-4 +10
+[dil-02005] :: Cholestasis / BSEP proxy: if logP >= 3 AND has_positive_states = true AND TPSA <= 75, add +8
+
+## REDUCTIONS
+[dil-03001] :: TPSA >= 140: -8
+[dil-03002] :: Zwitterion AND TPSA >= 120: -8
+[dil-03003] :: Formal charge <= -1 AND logP < 2: -5
+[dil-03004] :: If fraction_neutral <= 0.01 AND there are no high-risk structural alerts (hydrazine, furan, aniline, sulfonamide), apply an additional -8 to reflect strongly reduced membrane partitioning / hepatic exposure.
+
+## SAFETY CAP
+[dil-04001] :: If there are no structural alerts at all, AND logP < 2.5, AND aromatic rings <= 1, AND MW < 350, cap P_CURRENT at 35.
+
+## UNCERTAINTY DAMPENING
+[dil-05001] :: Apply uncertainty dampening only when one of the following is true:
+[dil-05002] :: (a) ionization is genuinely ambiguous, OR
+[dil-05003] :: (b) the molecule has many generic alerts but no clear high-risk DILI alert, OR
+[dil-05004] :: (c) the score is driven mainly by adverse physicochemical properties but there is no high-risk DILI structural alert.
+[dil-05005] :: If fraction_neutral <= 0.01, treat ionization as defined rather than ambiguous; do NOT trigger ambiguity-based dampening for ionization in that case.
+[dil-05006] :: When dampening applies, compute:
+[dil-05007] :: P_FINAL = round(50 + 0.7 * (P_CURRENT - 50))
+[dil-05008] :: Otherwise:
+[dil-05009] :: P_FINAL = round(P_CURRENT)
+[dil-05010] :: Clamp P_FINAL to [0, 100].
+
+## FINAL CLASSIFICATION
+[dil-06001] :: P_FINAL is a risk score, not a label by itself.
+[dil-06002] :: Final binary decision must be based only on P_FINAL:
+[dil-06003] :: If P_FINAL >= 50, output: (B) can cause DILI
+[dil-06004] :: If P_FINAL < 50, output: (A) cannot cause DILI
+[dil-06005] :: Do not use qualitative phrases such as "some risk", "moderate risk", or "non-zero risk" to override the numeric cutoff.

@@ -216,8 +216,145 @@ def evaluate_single_test_sample(args_tuple, data_processor) -> Tuple[Dict, str]:
         return None, f"Error evaluating sample {i}: {type(e).__name__}: {str(e)}"
 
 
+def sample_single_train_sample(args_tuple, data_processor) -> Tuple[Dict, str]:
+    """
+    Parallel-friendly initial sampling for a single training sample.
+
+    Like evaluate_single_test_sample but additionally returns gen_response and
+    bullet_ids so the caller can run reflection on wrong answers afterwards.
+
+    Args:
+        args_tuple: (index, task_dict, generator, playbook, max_tokens, log_dir,
+                     use_json_mode, max_parse_retries, epoch)
+        data_processor: DataProcessor instance with answer_is_correct method.
+
+    Returns:
+        Tuple of (result_dict, error_str). On success error_str is None.
+        result_dict keys:
+            index, sample, final_answer, gen_response, bullet_ids,
+            is_correct, parse_failed, target
+    """
+    (i, task_dict, generator, playbook, max_tokens, log_dir,
+     use_json_mode, max_parse_retries, epoch) = args_tuple
+    try:
+        question = task_dict.get("question", "")
+        context = task_dict.get("context", "")
+        target = task_dict.get("target", "")
+
+        final_answer = None
+        gen_response = None
+        bullet_ids = []
+        for attempt in range(max_parse_retries + 1):
+            if attempt > 0:
+                print(f"  [train init] Sample {i}: parse retry {attempt}/{max_parse_retries}")
+            gen_response, bullet_ids, _call_info = generator.generate(
+                question=question,
+                playbook=playbook,
+                context=context,
+                reflection="(empty)",
+                use_json_mode=use_json_mode,
+                call_id=f"train_e{epoch}_s{i}_init_attempt{attempt}",
+                log_dir=log_dir,
+            )
+            final_answer = extract_answer(gen_response)
+            if final_answer is not None:
+                break
+
+        parse_failed = final_answer is None
+        is_correct = (not parse_failed) and data_processor.answer_is_correct(final_answer, target)
+
+        return {
+            "index": i,
+            "sample": task_dict,
+            "final_answer": final_answer,
+            "gen_response": gen_response,
+            "bullet_ids": bullet_ids,
+            "is_correct": is_correct,
+            "parse_failed": parse_failed,
+            "target": target,
+        }, None
+
+    except Exception as e:
+        return None, f"Error sampling train sample {i}: {type(e).__name__}: {str(e)}"
+
+
+def parallel_sample_train_batch(
+    data_processor,
+    generators,
+    playbook: str,
+    train_samples: List[Dict],
+    max_tokens: int = 4096,
+    log_dir: str = None,
+    max_workers: int = 20,
+    use_json_mode: bool = False,
+    max_parse_retries: int = 4,
+    epoch: int = 1,
+) -> List[Dict]:
+    """
+    Parallel initial sampling of all training samples.
+
+    Distributes samples round-robin across the generator pool (same strategy as
+    evaluate_test_set). Returns results in the original sample order.
+
+    Args:
+        data_processor: DataProcessor instance.
+        generators: A single Generator or a list of Generators.
+        playbook: Current playbook string (read-only during this call).
+        train_samples: List of training sample dicts.
+        max_tokens: Max tokens for generation (passed through to generator).
+        log_dir: Directory for detailed LLM logs.
+        max_workers: ThreadPoolExecutor parallelism.
+        use_json_mode: Whether to use JSON generation mode.
+        max_parse_retries: Max extra attempts when answer parsing fails.
+        epoch: Current epoch number (used in call_id strings).
+
+    Returns:
+        List of result dicts (one per sample, sorted by original index).
+        Each dict has keys: index, sample, final_answer, gen_response,
+        bullet_ids, is_correct, parse_failed, target.
+    """
+    generators = generators if isinstance(generators, list) else [generators]
+    num_servers = len(generators)
+
+    print(f"\n{'='*40}")
+    print(f"[TRAIN INIT] Parallel sampling {len(train_samples)} samples, "
+          f"{max_workers} workers, {num_servers} server(s)")
+    print(f"{'='*40}")
+
+    args_list = [
+        (i, sample, generators[i % num_servers], playbook, max_tokens,
+         log_dir, use_json_mode, max_parse_retries, epoch)
+        for i, sample in enumerate(train_samples)
+    ]
+
+    results_by_index: Dict[int, Dict] = {}
+
+    def _wrapper(args_tuple):
+        return sample_single_train_sample(args_tuple, data_processor)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_args = {
+            executor.submit(_wrapper, args): args
+            for args in args_list
+        }
+        completed = 0
+        for future in as_completed(future_to_args):
+            result, error = future.result()
+            completed += 1
+            if error:
+                print(f"  {error}")
+                continue
+            if result is not None:
+                results_by_index[result["index"]] = result
+            if completed % 50 == 0:
+                print(f"  [train init] Progress: {completed}/{len(args_list)}")
+
+    # Return in original order (missing entries skipped gracefully)
+    return [results_by_index[i] for i in sorted(results_by_index.keys())]
+
+
 def evaluate_test_set(data_processor, generator, playbook, test_samples,
-                      max_tokens=4096, log_dir=None, max_workers=20, 
+                      max_tokens=4096, log_dir=None, max_workers=20,
                       use_json_mode=False, eval_label="TEST SET",
                       max_parse_retries=4) -> Tuple[Dict, Dict]:
     """
@@ -282,6 +419,7 @@ def evaluate_test_set(data_processor, generator, playbook, test_samples,
                 if parse_failed:
                     # Parse failure: count as wrong but do NOT append None to answers list
                     # (None would crash evaluate_accuracy / answer_is_correct)
+                    # Instead, we append a dummy string so length of answers matches total samples
                     results["total"] += 1
                     results["no_answer"] += 1
                     results["errors"].append({
@@ -289,6 +427,8 @@ def evaluate_test_set(data_processor, generator, playbook, test_samples,
                         "prediction": None,
                         "ground_truth": result["target"]
                     })
+                    results["answers"].append("<PARSE_FAIL>")
+                    results["targets"].append(result["target"])
                 else:
                     results["correct"] += (1 if result["is_correct"] else 0)
                     results["total"] += 1
@@ -327,7 +467,8 @@ def evaluate_test_set(data_processor, generator, playbook, test_samples,
         }
         
         f1_str = f", Macro F1: {final_results['macro_f1']:.3f}" if "macro_f1" in final_results else ""
-        print(f"\n📊 Final Accuracy: {accuracy:.3f} ({results['correct']}/{results['total']}){f1_str}")
+        parse_fail_str = f", Parse Failed: {final_results['no_answer']}" if final_results.get("no_answer", 0) > 0 else ""
+        print(f"\n📊 Final Accuracy: {accuracy:.3f} ({results['correct']}/{results['total']}){f1_str}{parse_fail_str}")
     else:
         final_results = {"accuracy": 0.0, "correct": 0, "total": 0}
         error_logs = {}

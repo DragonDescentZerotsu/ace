@@ -200,9 +200,8 @@ cd /data1/tianang/Projects/ace
 .venv/bin/python -m eval.tdc.run \
   --task_name AMES \
   --mode eval_only \
+  --eval_split valid \
   --generator_model <model> \
-  --reflector_model <model> \
-  --curator_model <model> \
   --initial_playbook_path ./results/tdc/best_playbook.txt \
   --save_path ./results/tdc_eval
 ```
@@ -217,6 +216,7 @@ cd /data1/tianang/Projects/ace
 | `--run_all` | `false` | Run all 16 tasks |
 | `--data_dir` | `<prepended data path>` | Base data directory |
 | `--mode` | `offline` | `offline` / `online` / `eval_only` |
+| `--eval_split` | `test` | Target split for `eval_only` mode (`test` or `valid`) |
 | `--generator_model` | *required* | Model name on port 8001 |
 | `--reflector_model` | *required* | OpenRouter model name |
 | `--curator_model` | *required* | Model name on port 8000 |

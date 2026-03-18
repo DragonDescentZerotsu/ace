@@ -3,25 +3,22 @@ Curator prompts for ACE system.
 """
 
 # Curator prompt for intelligent playbook management
-CURATOR_PROMPT = """You are a conservative curator of molecular playbooks.
-
-Your goal is NOT to fix the current example at all costs.
-Your goal is to make the playbook more robust for FUTURE similar molecules in the same task, while avoiding overfitting to isolated cases.
+CURATOR_PROMPT = """You are a master curator of knowledge. Your job is to identify what new insights should be added to an existing playbook based on a reflection from a previous attempt.
 
 **Context:**
 - The playbook you created will be used to help answering similar questions. 
-- The reflection was generated using ground-truth information that will NOT be available at inference time. Therefore, only add or revise content that improves likely generalization.
+- The reflection is generated using ground truth answers that will NOT be available when the playbook is being used. So you need to come up with content that can aid the playbook user to create predictions that likely align with ground truth. 
 
 **CRITICAL: You MUST respond with valid JSON only. Do not use markdown formatting or code blocks.**
 
 **Instructions:**
 - Review the existing playbook and the reflection from the previous attempt
 - Identify ONLY the NEW insights, strategies, or mistakes that are MISSING from the current playbook
-- Avoid redundancy - if similar advice already exists, only update or correct the MINIMAL content that is a perfect complement to the existing content.
+- Avoid redundancy - if similar advice already exists, only add or correct content that is a perfect complement to the existing playbook
 - Do NOT regenerate the entire playbook - only provide the additions and corrections needed
 - Focus on quality over quantity - a focused, well-organized playbook is better than an exhaustive one
 - Format your response as a PURE JSON object with specific sections
-- Only add or correct new content if the reflection is generalizable, otherwise return an EMPTY list for the operations field
+- For any operation if no new content to add or correct, return an empty list for the operations field
 - Be concise and specific - each addition or correction should be actionable
 
 

@@ -53,10 +53,13 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default=DEFAULT_DATA_DIR,
                         help="Base directory containing train/valid/test splits")
     parser.add_argument("--initial_playbook_path", type=str, default=None,
-                        help="Path to initial playbook. Defaults to playbooks/{task_name}.txt")
+                        help="Path to initial playbook. Defaults to playbooks/initial/{task_name}.txt")
     parser.add_argument("--mode", type=str, default="offline",
                         choices=["offline", "online", "eval_only"],
                         help="Run mode")
+    parser.add_argument("--eval_split", type=str, default="test",
+                        choices=["test", "valid", "train"],
+                        help="Which data split to evaluate on in eval_only mode (test, valid, or train)")
     
     # Model configuration
     parser.add_argument("--api_provider", type=str, default="local",
@@ -70,7 +73,8 @@ def parse_args():
     
     # Endpoint configuration
     parser.add_argument("--generator_base_url", type=str, nargs='+',
-                        default=["http://localhost:8001/v1", "http://localhost:8002/v1", "http://localhost:8003/v1", "http://localhost:8004/v1", "http://localhost:8005/v1", "http://localhost:8006/v1"],
+                        # default=["http://localhost:8001/v1"],
+                        default=["http://localhost:8001/v1","http://localhost:8002/v1", "http://localhost:8003/v1", "http://localhost:8004/v1", "http://localhost:8005/v1", "http://localhost:8006/v1"],
                         help="Base URL(s) for generator LLM. Pass one or more URLs to distribute "
                              "evaluation workload across multiple servers in round-robin fashion. "
                              "Example: --generator_base_url http://localhost:8001/v1 http://localhost:8002/v1")
@@ -96,13 +100,16 @@ def parse_args():
                         help="Run curator every N steps")
     parser.add_argument("--curator_on_correction_only", action="store_true",
                         help="Only run curator when reflection corrects a wrong answer")
+    parser.add_argument("--val_gated_curator", action="store_true",
+                        help="After each curator update, run a parallel dev-set F1 eval "
+                             "and roll back if F1 does not improve (offline mode only)")
     parser.add_argument("--eval_steps", type=int, default=100,
                         help="Evaluate on validation set every N steps")
     parser.add_argument("--save_steps", type=int, default=50,
                         help="Save intermediate playbooks every N steps")
     
     # System configuration
-    parser.add_argument("--max_tokens", type=int, default=4096,
+    parser.add_argument("--max_tokens", type=int, default=10240,
                         help="Max tokens for LLM responses")
     parser.add_argument("--playbook_token_budget", type=int, default=80000,
                         help="Token budget for playbook")
@@ -168,7 +175,7 @@ def load_initial_playbook(path: str, task_name: str) -> str:
     # Try default path
     default_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "playbooks", f"{task_name}.txt"
+        "playbooks", "initial", f"{task_name}.txt"
     )
     if os.path.exists(default_path):
         with open(default_path, 'r') as f:
@@ -181,7 +188,8 @@ def load_initial_playbook(path: str, task_name: str) -> str:
 
 
 def preprocess_data(task_name: str, data_dir: str, mode: str,
-                    max_train_samples: int = None, max_val_samples: int = None):
+                    max_train_samples: int = None, max_val_samples: int = None,
+                    eval_split: str = "test"):
     """
     Load and preprocess TDC data for a given task.
     
@@ -201,13 +209,27 @@ def preprocess_data(task_name: str, data_dir: str, mode: str,
         train_samples = None
         val_samples = None
         
-        test_path = os.path.join(data_dir, "test", f"{task_name}.jsonl")
-        if not os.path.exists(test_path):
-            # Fall back to valid set if test doesn't exist
+        if mode == "eval_only" and eval_split == "valid":
             test_path = os.path.join(data_dir, "valid", f"{task_name}.jsonl")
+        elif mode == "eval_only" and eval_split == "train":
+            test_path = os.path.join(data_dir, "train", f"{task_name}.jsonl")
+        else:
+            test_path = os.path.join(data_dir, "test", f"{task_name}.jsonl")
+            if not os.path.exists(test_path):
+                # Fall back to valid set if test doesn't exist
+                test_path = os.path.join(data_dir, "valid", f"{task_name}.jsonl")
+        
         test_samples = load_data(test_path)
         test_samples = processor.process_task_data(test_samples)
         
+        # In eval_only with eval_split="valid" or "train", cap samples if requested
+        if mode == "eval_only" and eval_split == "valid" and max_val_samples and max_val_samples < len(test_samples):
+            test_samples = test_samples[:max_val_samples]
+            print(f"Limited validation eval samples to {max_val_samples}")
+        elif mode == "eval_only" and eval_split == "train" and max_train_samples and max_train_samples < len(test_samples):
+            test_samples = test_samples[:max_train_samples]
+            print(f"Limited train eval samples to {max_train_samples}")
+            
         print(f"{mode} mode: Testing on {len(test_samples)} examples")
     else:
         # Offline mode: load train and valid
@@ -265,7 +287,7 @@ def run_single_task(task_name: str, args):
     # Load and preprocess data
     train_samples, val_samples, test_samples, data_processor = preprocess_data(
         task_name, args.data_dir, args.mode,
-        args.max_train_samples, args.max_val_samples
+        args.max_train_samples, args.max_val_samples, args.eval_split
     )
     
     # Load initial playbook
@@ -295,6 +317,7 @@ def run_single_task(task_name: str, args):
         'max_num_rounds': args.max_num_rounds,
         'curator_frequency': args.curator_frequency,
         'curator_on_correction_only': args.curator_on_correction_only,
+        'val_gated_curator': args.val_gated_curator,
         'eval_steps': args.eval_steps,
         'save_steps': args.save_steps,
         'playbook_token_budget': args.playbook_token_budget,
@@ -313,6 +336,7 @@ def run_single_task(task_name: str, args):
         'bulletpoint_analyzer_threshold': args.bulletpoint_analyzer_threshold,
         'max_parse_retries': args.max_parse_retries,
         'api_provider': args.api_provider,
+        'eval_split': args.eval_split,
     }
     
     # Run
